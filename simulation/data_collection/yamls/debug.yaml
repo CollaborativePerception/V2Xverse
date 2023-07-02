@@ -1,0 +1,10 @@
+destory_hazard_actors: False
+ego_num: 1
+rgb_only: false
+save_skip_frames: 4
+waypoint_disturb: 0.2
+waypoint_disturb_seed: 2020
+weather: 0
+max_speed: 7.5
+slow_speed: 4.0
+visibility: 'global'

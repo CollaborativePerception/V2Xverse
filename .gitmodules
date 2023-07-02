@@ -1,12 +1,6 @@
 [submodule "third_party/InterFuser"]
 	path = third_party/InterFuser
 	url = git@github.com:CollaborativePerception/InterFuser.git
-[submodule "third_party/scenario_runner"]
-	path = third_party/scenario_runner
-	url = git@github.com:carla-simulator/scenario_runner.git
-[submodule "third_party/leaderboard"]
-	path = third_party/leaderboard
-	url = git@github.com:CollaborativePerception/leaderboard.git
 [submodule "third_party/OpenCOODv2"]
 	path = third_party/OpenCOODv2
 	url = git@github.com:CollaborativePerception/OpenCOODv2.git

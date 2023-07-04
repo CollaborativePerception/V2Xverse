@@ -10,6 +10,5 @@ CUDA_VISIBLE_DEVICES=0 /GPFS/data/gjliu/Auto-driving/Cop3/carla/CarlaUE4.sh --wo
 
 运行数据生成
 ~~~
-cd simulation
-bash data_collection/routes_town01_0.sh
+bash simulation/data_collection/routes_town01_0.sh
 ~~~

@@ -1,0 +1,70 @@
+common:
+  input_frame: &INPUT_FRAME 5
+  output_points: &OUTPUT_POINTS 10
+  deg_range: &DET_RANGE [36, 12, 12, 12, 0.125]
+
+data:
+  training:
+    dataset:
+      type: "CarlaMVDatasetWithGTInput"
+      root: "./data"
+      towns: [1, 2, 3, 4]
+      weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      input_frame: *INPUT_FRAME
+      output_points: *OUTPUT_POINTS
+      det_range: *DET_RANGE
+    distributed_sampler:
+      type: "DistributedSampler"
+      shuffle: True
+      drop_last: False
+    dataloader:
+      type: "DataLoader"
+      batch_size: 64
+      num_workers: 8
+  validation:
+    dataset:
+      type: "CarlaMVDatasetWithGTInput"
+      root: "./data"
+      towns: [7, 10]
+      weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      input_frame: *INPUT_FRAME
+      output_points: *OUTPUT_POINTS
+      det_range: *DET_RANGE
+    distributed_sampler:
+      type: "DistributedSampler"
+      shuffle: False
+      drop_last: False
+    dataloader:
+      type: "DataLoader"
+      batch_size: 128
+      num_workers: 4
+
+model:
+  type: "WaypointPlanner"
+  # TODO: other hyper-parameters
+
+model_decoration:
+  clip_grad: 10
+
+loss:
+  type: "CompoundLoss"
+  loss_configs:
+  - config:
+      type: "WaypointL1Loss"
+    weight: 1.0
+
+training:
+  epochs: &EPOCHS 50
+  log_interval: 50
+
+  optimizer:
+    type: "AdamW"
+    lr: 0.0005
+    # TODO (yinda): add learning rate configuration with REGEX
+    # --with-backbone-lr --backbone-lr 0.0002 \
+    weight_decay: 0.05
+    eps: 1.0e-8
+  lr_scheduler:
+    type: 'CosineAnnealingLR'
+    T_max: *EPOCHS
+    eta_min: 1.0e-6  # TODO (yinda) verify this number in CoP3

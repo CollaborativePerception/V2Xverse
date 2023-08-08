@@ -1,7 +1,8 @@
 from collections.abc import Iterable
 from typing import Tuple, Dict
 
-from . import CODRIVING_REGISTRY
+from codriving import CODRIVING_REGISTRY
+
 import torch.nn.functional as F
 import torch.nn as nn
 import torch

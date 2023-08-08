@@ -17,10 +17,13 @@ from common.detection import generate_det_data
 
 from skimage.measure import block_reduce
 
+from codriving import CODRIVING_REGISTRY
+
 _logger = logging.getLogger(__name__)
 
 
 # CarlaMVDetDataset_planner
+@CODRIVING_REGISTRY.register
 class CarlaMVDatasetWithGTInput(BaseIODataset):
 	"""
     Carla multi-vehicle dataset with ground-truth as input data

@@ -1,4 +1,6 @@
 from typing import Dict
+from copy import deepcopy
+
 
 def _register_generic(
         module_dict : Dict,
@@ -42,3 +44,20 @@ class Registry(dict):
         _register_generic(self, name, module)
 
         return module
+
+
+def build_object_within_registry_from_config(
+    registry : Registry, config : Dict, **kwargs,
+):
+    """
+    Build object within a registry from config
+    Config should be in form of keyword arguments (dict-like)
+    Support adding additional config items through kwargs
+        NOTE: kwargs will not be deep-copied
+    """
+    config = deepcopy(config)
+    config.update(kwargs)
+    class_name = config.pop('type')
+    obj = registry[class_name](**config)
+
+    return obj

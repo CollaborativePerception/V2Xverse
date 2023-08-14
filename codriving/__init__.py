@@ -1,19 +1,29 @@
+import torch
+import torch.utils.data
 from torch import optim
+from torch import nn
 from codriving.utils import Registry
 
 
 CODRIVING_REGISTRY = Registry('codriving')
 
-# register all optimizers from torch
-for k, v in optim.__dict__.items():
-    # filter out private objects and magic methods
-    if k.startswith('_'):
-        continue
-    CODRIVING_REGISTRY.register(v)
+def _register_all_classes_within_module(m):
+    for k, v in m.__dict__.items():
+        # filter out private objects and magic methods
+        if k.startswith('_'):
+            continue
+        # filter out non-class object,
+        #   assuming python naming convention being strictly followed within PyTorch
+        if not k[0].isupper():
+            continue
+        CODRIVING_REGISTRY.register(v)
 
+
+# register all optimizers from torch
+_register_all_classes_within_module(optim)
+# register all lr_schedulers from torch
+_register_all_classes_within_module(optim.lr_scheduler)
 # register all nn.Modules from torch
-for k, v in optim.__dict__.items():
-    # filter out private objects and magic methods
-    if k.startswith('_'):
-        continue
-    CODRIVING_REGISTRY.register(v)
+_register_all_classes_within_module(nn.Modules)
+# register all torch.utils.data from torch
+_register_all_classes_within_module(torch.utils.data)

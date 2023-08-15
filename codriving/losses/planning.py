@@ -1,9 +1,9 @@
 import torch
 
-from codriving import Registry
+from codriving import CODRIVING_REGISTRY
 
 
-@Registry.register
+@CODRIVING_REGISTRY.register
 class WaypointL1Loss:
     """
     Loss for supervising waypoint predictor

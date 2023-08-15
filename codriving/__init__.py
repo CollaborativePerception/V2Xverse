@@ -2,10 +2,12 @@ import torch
 import torch.utils.data
 from torch import optim
 from torch import nn
-from codriving.utils import Registry
 
-
-CODRIVING_REGISTRY = Registry('codriving')
+from common import Registry
+CODRIVING_REGISTRY = Registry('codriving')  # TODO (yinda): resolve this order-sensitive code
+import codriving.data_utils
+import codriving.models
+import codriving.losses
 
 def _register_all_classes_within_module(m):
     for k, v in m.__dict__.items():

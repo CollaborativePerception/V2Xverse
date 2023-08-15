@@ -10,6 +10,7 @@ from torch.utils.data import distributed
 from common.random import set_random_seeds
 from common.registry import build_object_within_registry_from_config
 from common.io import load_config_from_yaml
+import codriving
 from codriving import CODRIVING_REGISTRY
 from codriving.models.model_decoration import decorate_model
 

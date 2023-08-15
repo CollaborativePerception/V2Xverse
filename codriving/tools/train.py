@@ -38,6 +38,12 @@ def parse_args():
         help="#workers for dataloader (default: 1)",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=73,
+        help="Random seed",
+    )
+    parser.add_argument(
         "--local-rank",
         default=0,
         type=int,
@@ -59,7 +65,6 @@ def main():
     args = parse_args()
     set_random_seeds(args.seed, args.local_rank)
     config = load_config_from_yaml(args.config_file)
-
 
     DISTRIBUTED = \
         ("WORLD_SIZE" in os.environ) and \

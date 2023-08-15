@@ -144,7 +144,7 @@ def main():
     # TODO (yinda): add `lr_scheduler`
     # scheduler
     # Documentation: https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
-    lr_scheduler_config = train_config['optimizer']
+    lr_scheduler_config = train_config['lr_scheduler']
     lr_scheduler = build_object_within_registry_from_config(
         CODRIVING_REGISTRY,
         lr_scheduler_config,

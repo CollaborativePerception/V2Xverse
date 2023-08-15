@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from typing import Iterable
 from typing import Tuple, Dict
 
 from codriving import CODRIVING_REGISTRY
@@ -26,7 +26,7 @@ class Conv3D(nn.Module):
     
 
 class MLP(nn.Module):
-	def __init__(self, in_feat : int, out_feat : int, hid_feat : Iterable[int, int]=(1024, 512), activation=None, dropout=-1):
+	def __init__(self, in_feat : int, out_feat : int, hid_feat : Iterable[int]=(1024, 512), activation=None, dropout=-1):
 		super(MLP, self).__init__()
 		dims = (in_feat, ) + hid_feat + (out_feat, )
 

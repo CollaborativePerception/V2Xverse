@@ -112,7 +112,7 @@ def main():
         model_config,
     )
     model_decoration_config = config['model_decoration']
-    if model_config['clip_grad'] is not None:
+    if model_decoration_config.get('clip_grad', None) is not None:
         decorate_model(model, **model_decoration_config)
 
     if DISTRIBUTED:

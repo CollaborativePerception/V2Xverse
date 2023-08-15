@@ -15,9 +15,8 @@ data:
     num_workers: 16
 
 model:
-  planner:
-    type: "WaypointPlanner"
-    # TODO: other hyper-parameters
+  type: "WaypointPlanner"
+  # TODO: other hyper-parameters
 
 model_decoration:
   clip_grad: 10

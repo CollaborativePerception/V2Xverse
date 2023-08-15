@@ -4,8 +4,10 @@ import torch
 from torch import nn
 
 from common.registry import build_object_within_registry_from_config
+from codriving import CODRIVING_REGISTRY
 
 
+@CODRIVING_REGISTRY.register
 class CompoundLoss(nn.Module):
     def __init__(self, loss_configs):
         super(CompoundLoss, self).__init__()
@@ -13,10 +15,9 @@ class CompoundLoss(nn.Module):
         self.loss_modules = nn.ModuleList()
         self.loss_weights = list()
         for loss_item in loss_configs:
-            self.loss_names(loss_item['name'])
-            self.loss_modules.append(
-                build_object_within_registry_from_config(loss_item['config'])
-                )
+            self.loss_names.append(loss_item['config']['type'])
+            self.loss_modules.append(build_object_within_registry_from_config(
+                CODRIVING_REGISTRY, loss_item['config']))
             self.loss_weights.append(loss_item['weight'])
 
     def forward(self, batch_data : Dict, model_output : Dict):

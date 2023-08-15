@@ -1,14 +1,16 @@
 import torch
+from torch import nn
 
 from codriving import CODRIVING_REGISTRY
 
 
 @CODRIVING_REGISTRY.register
-class WaypointL1Loss:
+class WaypointL1Loss(nn.Module):
     """
     Loss for supervising waypoint predictor
     """
     def __init__(self, l1_loss=torch.nn.L1Loss):
+        super(WaypointL1Loss, self).__init__()
         self.loss = l1_loss(reduction="none")
         # TODO: remove this hardcode
         # and make it extensible to variable trajectory length

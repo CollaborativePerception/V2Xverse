@@ -24,9 +24,9 @@ model_decoration:
 loss:
   type: "CompoundLoss"
   loss_configs:
-  - type: "WaypointL1Loss"
-  - config: {}
-  - weight: 1.0
+  - config:
+      type: "WaypointL1Loss"
+    weight: 1.0
 
 training:
   epochs: &EPOCHS 50

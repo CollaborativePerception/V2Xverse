@@ -379,8 +379,8 @@ class CarlaMVDatasetWithGTInput(BaseIODataset):
 	   
 		return output_dict
 
-
-	def collate_batch_train(self, batch):
+	@classmethod
+	def collate_fn(cls, batch):
 		'''
 		Re-collate a batch
 
@@ -430,5 +430,6 @@ class CarlaMVDatasetWithGTInput(BaseIODataset):
 		output_dict["occupancy"] = torch.stack(occupancy, dim=0).float()
 		output_dict["target"] = torch.stack(target, dim=0).float()
 		future_waypoints = torch.stack(future_waypoints, dim=0).float()
+		output_dict["future_waypoints"] = future_waypoints
 
-		return output_dict, future_waypoints
+		return output_dict

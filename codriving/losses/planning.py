@@ -27,11 +27,12 @@ class WaypointL1Loss(nn.Module):
             0.04450719328435308,
         ]
 
-    def __call__(self, output, target):
-        # invaild_mask = target.ge(1000)
-        # output[invaild_mask] = 0
-        # target[invaild_mask] = 0
+    def __call__(self, batch_data, model_output):
+        output = model_output['future_waypoints']
+        target = batch_data['future_waypoints']
         loss = self.loss(output, target)  # shape: n, 12, 2
         loss = torch.mean(loss, (0, 2))  # shape: 12
         loss = loss * torch.tensor(self.weights, device=output.device)
-        return torch.mean(loss)
+        extra_info = dict()
+
+        return torch.mean(loss), extra_info

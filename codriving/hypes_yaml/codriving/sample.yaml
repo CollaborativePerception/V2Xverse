@@ -11,7 +11,7 @@ data:
     det_range: [36, 12, 12, 12, 0.125]
   dataloader:
     type: "DataLoader"
-    batch_size: 128
+    batch_size: 16
     num_workers: 16
 
 model:

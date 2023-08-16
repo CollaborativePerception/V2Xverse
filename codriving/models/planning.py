@@ -98,10 +98,9 @@ class WaypointPlanner(nn.Module):
         Returns:
             torch.Tensor: predicted waypoints
         """
-        occupancy = input_data["occupancy"]  # [B, 5, 2, 40, 20]
-        # print("Occupancy shape: ", occupancy.shape)
+        occupancy = input_data["occupancy"]  # B,T,C,H,W = [B, 5, 6, 384, 192]
+        # print("occupancy_map shape: ", occupancy_map.shape)
         # [4, 5, 2, 40, 20]
-
         batch, seq, c, h, w = occupancy.size()
 
         x = occupancy.view(-1, c, h, w)  # batch*seq, c, h, w
@@ -146,6 +145,7 @@ class WaypointPlanner(nn.Module):
         feature_target = self.target_encoder(input_data['target'])
         # print(feature_target.shape)
         future_waypoints = self.decoder(torch.cat((feature, feature_target), dim=1)).contiguous().view(batch, 10, 2)
+        output_data = dict(future_waypoints=future_waypoints)
 
-        return future_waypoints
+        return output_data
 

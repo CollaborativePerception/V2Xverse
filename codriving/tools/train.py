@@ -44,6 +44,12 @@ def parse_args():
         help="Random seed",
     )
     parser.add_argument(
+        "--log-interval",
+        type=int,
+        default=50,
+        help="Log interval",
+    )
+    parser.add_argument(
         "--local-rank",
         default=0,
         type=int,
@@ -108,6 +114,7 @@ def main():
         dataloader_config,
         dataset=dataset,
         sampler=data_sampler,
+        collate_fn=dataset.collate_fn,
     )
 
     # build NN model
@@ -191,10 +198,10 @@ def train_one_epoch(
 
     for batch_idx, batch_data in enumerate(dataloader):
         model_output = model(batch_data)
-        optimizer.zero_grad()
         loss, extra_info = loss_func(batch_data, model_output)
         # TODO (yinda): add methods for extra_info collection or analyzing
 
+        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
@@ -205,7 +212,7 @@ def train_one_epoch(
 
         if last_batch_reached or batch_idx % int(args.log_interval) == 0:
             if DEVICE == 0:
-                # TODO (yinda): add monitoring function here
+                # TODO (yinda): add monitoring and logging function here
                 pass
 
 if __name__ == "__main__":

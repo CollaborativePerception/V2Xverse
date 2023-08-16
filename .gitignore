@@ -165,3 +165,7 @@ cython_debug/
 # VSCode
 .vscode/
 
+# data
+data/  # folder
+data  # symbolic link
+work_dirs/

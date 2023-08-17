@@ -13,6 +13,8 @@ from common.io import load_config_from_yaml
 import codriving
 from codriving import CODRIVING_REGISTRY
 from codriving.models.model_decoration import decorate_model
+from codriving.utils.torch_helper import move_dict_data_to_device
+
 
 logger = logging.getLogger("train")
 
@@ -50,12 +52,6 @@ def parse_args():
         help="Log interval",
     )
     parser.add_argument(
-        "--local-rank",
-        default=0,
-        type=int,
-        help="parse local rank from `torch.distributed` module",
-        )
-    parser.add_argument(
         "--out-dir",
         default="./output/",
         type=str,
@@ -68,8 +64,10 @@ def parse_args():
 
 
 def main():
+    LOCAL_RANK = int(os.environ.get('LOCAL_RANK', 0))
+
     args = parse_args()
-    set_random_seeds(args.seed, args.local_rank)
+    set_random_seeds(args.seed, LOCAL_RANK)
     config = load_config_from_yaml(args.config_file)
 
     DISTRIBUTED = \
@@ -77,9 +75,9 @@ def main():
         (int(os.environ["WORLD_SIZE"]) > 1)
 
     # Documentation: https://pytorch.org/docs/stable/distributed.html
+    # TODO (yinda): use proto to define the data schema of the training context.
     if DISTRIBUTED:
-        args.device = "cuda:%d" % args.local_rank
-        torch.cuda.set_device(args.local_rank)
+        torch.cuda.set_device(LOCAL_RANK)
         torch.distributed.init_process_group(backend="nccl", init_method="env://")
         WOLRD_SIZE = torch.distributed.get_world_size()
         RANK = torch.distributed.get_rank()
@@ -87,12 +85,14 @@ def main():
             "Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d."
             % (WOLRD_SIZE, RANK)
         )
-        DEVICE = args.local_rank
+        DEVICE = f"cuda:{LOCAL_RANK}"
     else:
         logger.info("Training with a single process on 1 GPUs.")
         WOLRD_SIZE = 1
         RANK = 0
         DEVICE = 0
+
+    print(f'Rank {RANK} using device: {DEVICE}')
 
     # NOTE: assume that dataset is constructed within dataloader
     # dataset
@@ -104,7 +104,7 @@ def main():
     )
     # sampler
     if DISTRIBUTED:
-        data_sampler = distributed.DistributedSampler(dataset)
+        data_sampler = distributed.DistributedSampler(dataset, shuffle=True)
     else:
         data_sampler = None
     # dataloader
@@ -123,9 +123,9 @@ def main():
         CODRIVING_REGISTRY,
         model_config,
     )
+    model.to(DEVICE)
     model_decoration_config = config['model_decoration']
-    if model_decoration_config.get('clip_grad', None) is not None:
-        decorate_model(model, **model_decoration_config)
+    decorate_model(model, **model_decoration_config)
 
     if DISTRIBUTED:
         # Documentation: https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
@@ -165,30 +165,36 @@ def main():
 
     # trainining loop
     for epoch_idx in range(EPOCHS):
-
         train_one_epoch(
             args,
             epoch_idx,
+            EPOCHS,
             model,
             loss_func,
             dataloader,
             optimizer,
             lr_scheduler=lr_scheduler,
         )
-        # TODO: add validation stage
+        # TODO (yinda): add a validation stage
         lr_scheduler.step()
 
 
 def train_one_epoch(
     args : argparse.Namespace,
     epoch_idx : int,
+    max_epoch : int,
     model : nn.Module,
     loss_func : nn.Module,
     dataloader : torch.utils.data.DataLoader,
     optimizer : torch.optim.Optimizer,
     lr_scheduler=None,
 ):
-    DEVICE = args.local_rank
+    """
+    Train an epoch
+    TODO (yinda): use proto to define the data schema of the training context.
+    """
+    LOCAL_RANK = int(os.environ.get('LOCAL_RANK', 0))
+    DEVICE = f"cuda:{LOCAL_RANK}"
 
     model.train()
 
@@ -197,6 +203,7 @@ def train_one_epoch(
     max_iters_in_current_epoch = len(dataloader)
 
     for batch_idx, batch_data in enumerate(dataloader):
+        move_dict_data_to_device(batch_data, DEVICE)
         model_output = model(batch_data)
         loss, extra_info = loss_func(batch_data, model_output)
         # TODO (yinda): add methods for extra_info collection or analyzing
@@ -211,9 +218,15 @@ def train_one_epoch(
         last_batch_reached = (batch_idx == (last_batch_idx - 1))
 
         if last_batch_reached or batch_idx % int(args.log_interval) == 0:
-            if DEVICE == 0:
+            if LOCAL_RANK == 0:
                 # TODO (yinda): add monitoring and logging function here
-                pass
+                # TODO (yinda): change to a more formal logging
+                print((
+                    f'Epoch: {epoch_idx}/{max_epoch}, '
+                    f'iter.: {batch_idx}/{max_iters_in_current_epoch}, '
+                    f'loss: {loss.detach().cpu().numpy()}'
+                ))
+
 
 if __name__ == "__main__":
     main()

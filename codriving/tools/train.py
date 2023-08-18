@@ -5,7 +5,7 @@ import logging
 import torch
 from torch import nn
 import torch.utils.data
-from torch.utils.data import distributed
+from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
 
 from common.random import set_random_seeds
 from common.registry import build_object_within_registry_from_config
@@ -13,7 +13,8 @@ from common.io import load_config_from_yaml
 import codriving
 from codriving import CODRIVING_REGISTRY
 from codriving.models.model_decoration import decorate_model
-from codriving.utils.torch_helper import move_dict_data_to_device
+from codriving.utils.torch_helper import \
+    move_dict_data_to_device, build_dataloader
 
 
 logger = logging.getLogger("train")
@@ -94,28 +95,11 @@ def main():
 
     print(f'Rank {RANK} using device: {DEVICE}')
 
-    # NOTE: assume that dataset is constructed within dataloader
-    # dataset
     data_config = config['data']
-    dataset_config = data_config['dataset']
-    dataset = build_object_within_registry_from_config(
-        CODRIVING_REGISTRY,
-        dataset_config,
-    )
-    # sampler
-    if DISTRIBUTED:
-        data_sampler = distributed.DistributedSampler(dataset, shuffle=True)
-    else:
-        data_sampler = None
-    # dataloader
-    dataloader_config = data_config['dataloader']
-    dataloader = build_object_within_registry_from_config(
-        CODRIVING_REGISTRY,
-        dataloader_config,
-        dataset=dataset,
-        sampler=data_sampler,
-        collate_fn=dataset.collate_fn,
-    )
+    train_data_config = data_config['training']
+    train_dataloader = build_dataloader(train_data_config, DISTRIBUTED)
+    val_data_config = data_config['validation']
+    val_dataloader = build_dataloader(val_data_config, DISTRIBUTED)
 
     # build NN model
     model_config = config['model']
@@ -163,20 +147,37 @@ def main():
         optimizer=optimizer,
         )
 
-    # trainining loop
     for epoch_idx in range(EPOCHS):
+        # trainining
         train_one_epoch(
             args,
             epoch_idx,
             EPOCHS,
             model,
             loss_func,
-            dataloader,
+            train_dataloader,
             optimizer,
             lr_scheduler=lr_scheduler,
         )
-        # TODO (yinda): add a validation stage
         lr_scheduler.step()
+
+        # validation
+        validate_one_epoch(
+            args,
+            epoch_idx,
+            EPOCHS,
+            model,
+            loss_func,
+            val_dataloader,
+        )
+
+        # serialization
+        save_checkpoint(
+            args,
+            epoch_idx,
+            model,
+            optimizer,
+        )
 
 
 def train_one_epoch(
@@ -187,11 +188,22 @@ def train_one_epoch(
     loss_func : nn.Module,
     dataloader : torch.utils.data.DataLoader,
     optimizer : torch.optim.Optimizer,
-    lr_scheduler=None,
+    lr_scheduler : LRScheduler=None,
 ):
     """
     Train an epoch
     TODO (yinda): use proto to define the data schema of the training context.
+        to reduce the number of context
+
+    Args:
+        args (argparse.Namespace): parsed arguments
+        epoch_idx (int): epoch index
+        max_epoch (int): maximum epoch index
+        model (nn.Module): model to be trained
+        loss_func (nn.Module): loss function used for supervision
+        dataloader (torch.utils.data.DataLoader): training dataloader
+        optimizer (torch.optim.Optimizer): optimizer for updating the parameters
+        lr_scheduler (LRScheduler): learning rate scheduler
     """
     LOCAL_RANK = int(os.environ.get('LOCAL_RANK', 0))
     DEVICE = f"cuda:{LOCAL_RANK}"
@@ -226,6 +238,96 @@ def train_one_epoch(
                     f'iter.: {batch_idx}/{max_iters_in_current_epoch}, '
                     f'loss: {loss.detach().cpu().numpy()}'
                 ))
+
+
+def validate_one_epoch(
+    args : argparse.Namespace,
+    epoch_idx : int,
+    max_epoch : int,
+    model : nn.Module,
+    loss_func : nn.Module,
+    dataloader : torch.utils.data.DataLoader,
+):
+    """
+    Validate one epoch
+
+    Args:
+        args (argparse.Namespace): parsed arguments
+        epoch_idx (int): epoch index
+        max_epoch (int): maximum epoch index
+        model (nn.Module): model to be validated
+        loss_func (nn.Module): loss used as the validation metrics
+            TODO (yinda): use customized & configurable metrics for validation
+        dataloader (torch.utils.data.DataLoader): validation dataloader
+    """
+    LOCAL_RANK = int(os.environ.get('LOCAL_RANK', 0))
+    DEVICE = f"cuda:{LOCAL_RANK}"
+
+    model.eval()
+
+    all_losses = list()
+    all_extra_infos = list()
+
+    max_iters_in_current_epoch = len(dataloader)
+
+    if LOCAL_RANK == 0:
+        print('Validating...')
+    with torch.no_grad():
+        for batch_idx, batch_data in enumerate(dataloader):
+            # if LOCAL_RANK == 0:
+            #     print(f'{batch_idx}/{max_iters_in_current_epoch}')
+            move_dict_data_to_device(batch_data, DEVICE)
+            model_output = model(batch_data)
+            loss, extra_info = loss_func(batch_data, model_output)
+            all_losses.append(loss.to('cpu'))
+            all_extra_infos.append(extra_info)
+
+    # gather object from all machines
+    objects_to_be_gathered = (all_losses, all_extra_infos)
+    output_list = [None for _ in range(int(os.environ["WORLD_SIZE"]))]
+    torch.distributed.all_gather_object(
+        output_list,
+        objects_to_be_gathered,
+    )
+    if LOCAL_RANK == 0:
+        gathered_losses = [obj[0] for obj in output_list]
+        gathered_losses = [t for sharded_result in gathered_losses for t in sharded_result]
+        gathered_losses = [t.to('cpu') for t in gathered_losses]
+        mean_loss = torch.stack(gathered_losses).mean()
+        mean_loss.detach().cpu().numpy()
+        print(f'Epoch {epoch_idx}/{max_epoch}, mean loss: {mean_loss}')
+
+
+def save_checkpoint(
+    args : argparse.Namespace,
+    epoch_idx : int,
+    model : nn.Module,
+    optimizer : torch.optim.Optimizer,
+):
+    """
+    Save checkpoint
+
+    Args:
+        args (argparse.Namespace): parsed arguments
+        epoch_idx (int): epoch index
+        model (nn.Module): model to be checkpointed
+        optimizer (torch.optim.Optimizer): optimizer state to be checkpointed
+    """
+    LOCAL_RANK = int(os.environ.get('LOCAL_RANK', 0))
+    if LOCAL_RANK != 0:
+        return
+
+    checkpoint = dict(
+        epoch=epoch_idx,
+        model_state_dict=model.state_dict(),
+        optimizer_state_dict=optimizer.state_dict()
+
+    )
+    save_dir = f'{args.out_dir}/models'
+    save_path = f'{save_dir}/epoch_{epoch_idx}.ckpt'
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    torch.save(checkpoint, save_path)
+    print(f'Save checkpoint to: {save_path}')
 
 
 if __name__ == "__main__":

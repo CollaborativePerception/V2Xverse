@@ -1,18 +1,43 @@
-common: {}
+common:
+  input_frame: &INPUT_FRAME 5
+  output_points: &OUTPUT_POINTS 10
+  deg_range: &DET_RANGE [36, 12, 12, 12, 0.125]
 
 data:
-  dataset:
-    type: "CarlaMVDatasetWithGTInput"
-    root: "./data"
-    towns: [1, 2, 3, 4]
-    weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-    input_frame: 5
-    output_points: 10
-    det_range: [36, 12, 12, 12, 0.125]
-  dataloader:
-    type: "DataLoader"
-    batch_size: 16
-    num_workers: 4
+  training:
+    dataset:
+      type: "CarlaMVDatasetWithGTInput"
+      root: "./data"
+      towns: [1, 2, 3, 4]
+      weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      input_frame: *INPUT_FRAME
+      output_points: *OUTPUT_POINTS
+      det_range: *DET_RANGE
+    distributed_sampler:
+      type: "DistributedSampler"
+      shuffle: True
+      drop_last: False
+    dataloader:
+      type: "DataLoader"
+      batch_size: 64
+      num_workers: 8
+  validation:
+    dataset:
+      type: "CarlaMVDatasetWithGTInput"
+      root: "./data"
+      towns: [7, 10]
+      weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      input_frame: *INPUT_FRAME
+      output_points: *OUTPUT_POINTS
+      det_range: *DET_RANGE
+    distributed_sampler:
+      type: "DistributedSampler"
+      shuffle: False
+      drop_last: False
+    dataloader:
+      type: "DataLoader"
+      batch_size: 256
+      num_workers: 4
 
 model:
   type: "WaypointPlanner"

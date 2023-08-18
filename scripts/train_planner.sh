@@ -16,7 +16,7 @@ echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 
 py_script_and_args="
     codriving/tools/train.py
-    --config-file ./codriving/hypes_yaml/codriving/sample.yaml
+    --config-file ./codriving/hypes_yaml/codriving/planner.yaml
     --out-dir ${work_dir}
     "
 

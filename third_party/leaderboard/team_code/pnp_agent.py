@@ -7,17 +7,23 @@ import carla
 import numpy as np
 from PIL import Image
 import pdb
-
+import sys
+sys.path.append('/GPFS/data/gjliu/Auto-driving/Cop3')
 from interfuser.timm.models import create_model
 from team_code.planner_mwb import RoutePlanner
 
 from leaderboard.autoagents import autonomous_agent
 
 from team_code.utils.carla_birdeye_view import BirdViewProducer, BirdViewCropType, PixelDimensions
-from team_code.pnp_infer_action import PnP_infer
+
+from team_code.v2xverse_infer_action import PnP_infer
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
 from leaderboard.sensors.fixed_sensors import RoadSideUnit, get_rsu_point
+
+import team_code.utils.yaml_utils as yaml_utils
+from opencood.tools import train_utils, inference_utils
+from opencood.data_utils.datasets import build_dataset
 
 def get_entry_point():
     return "PnP_Agent"
@@ -63,7 +69,7 @@ def get_camera_extrinsic(cur_extrin, ref_extrin):
 
 #### agents
 class PnP_Agent(autonomous_agent.AutonomousAgent):
-    def setup(self, path_to_conf_file, ego_vehicles_num, max_speed=10):
+    def setup(self, path_to_conf_file, ego_vehicles_num):
     
         self.agent_name = "pnp"
         self.step = -1
@@ -73,7 +79,7 @@ class PnP_Agent(autonomous_agent.AutonomousAgent):
         self._sensor_data = self._rgb_sensor_data.copy()
 
         self.config = imp.load_source("MainModel", path_to_conf_file).GlobalConfig()
-        self.config.max_speed = max_speed
+        self.max_speed = self.config.max_speed
         self.skip_frames = self.config.skip_frames
         self.first_generate_rsu = True
         self.change_rsu_frame = 5
@@ -82,11 +88,22 @@ class PnP_Agent(autonomous_agent.AutonomousAgent):
         ############
         ###### load the model parameters
         ############
-        self.perception_model = create_model(self.config.perception_model['name'], fusion_mode=self.config.fusion_mode, test_mode='inter')
-        path_to_model_file = self.config.perception_model['path']
-        print('load perception model: %s' % path_to_model_file)
-        self.perception_model.load_state_dict(torch.load(path_to_model_file)["state_dict"])
-        self.perception_model.cuda()
+
+        model_dir = '/GPFS/data/gjliu/Auto-driving/OpenCOODv2/opencood/logs/multiclass_where2comm_v2xverse_2023_07_26_15_15_08'  # '/GPFS/data/gjliu/Auto-driving/OpenCOODv2/opencood/logs/v2xverse_centerpoint_where2comm_withshrinkhead_multiclass_none_fusion_2023_07_13_23_36_58' # 
+        hypes = yaml_utils.load_yaml(model_dir)
+        opencood_validate_dataset = build_dataset(hypes, visualize=True, train=False)
+
+        print('Creating perception Model')
+        self.perception_model = train_utils.create_model(hypes)
+        print('Loading Model from checkpoint')
+        saved_path = model_dir
+        resume_epoch, self.perception_model = train_utils.load_saved_model(saved_path, self.perception_model)
+        print(f"resume from {resume_epoch} epoch.")
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if torch.cuda.is_available():
+            # self.perception_model.cuda()
+            self.perception_model.to(device)
         self.perception_model.eval()
 
         self.planning_model = create_model(self.config.planning_model['name'])
@@ -103,7 +120,10 @@ class PnP_Agent(autonomous_agent.AutonomousAgent):
         self.infer = PnP_infer(config=self.config,
                                ego_vehicles_num=self.ego_vehicles_num,
                                perception_model=self.perception_model,
-                               planning_model=self.planning_model)
+                               planning_model=self.planning_model,
+                               opencood_validate_dataset=opencood_validate_dataset,
+                               device=device,
+                               hypes=hypes)
 
 
     def _init(self):
@@ -267,7 +287,7 @@ class PnP_Agent(autonomous_agent.AutonomousAgent):
         )
         lidar = input_data["lidar_{}".format(vehicle_num)][1]   ## HERE was a BUG, but I have fixed it now.
         gps = input_data["gps_{}".format(vehicle_num)][1][:2]
-        speed = input_data["speed_{}".format(vehicle_num)][1]["speed"]
+        speed = input_data["speed_{}".format(vehicle_num)][1]["move_state"]["speed"]
         compass = input_data["imu_{}".format(vehicle_num)][1][-1]
         if (
             math.isnan(compass) == True

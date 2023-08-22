@@ -30,7 +30,6 @@ class MapAgent(BaseAgent):
 
     def set_global_plan(self, global_plan_gps, global_plan_world_coord):
         super().set_global_plan(global_plan_gps, global_plan_world_coord)
-
         self._plan_HACK = global_plan_world_coord
         self._plan_gps_HACK = global_plan_gps
 

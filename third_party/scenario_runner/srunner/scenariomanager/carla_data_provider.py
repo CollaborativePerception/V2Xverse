@@ -795,10 +795,8 @@ class CarlaDataProvider(object):  # pylint: disable=too-many-public-methods
                     walker_bp.set_attribute('is_invincible', 'false')
                 if walker_bp.has_attribute('speed'):
                     if crazy_level != 0:
-                        if danger_walker_amount <= danger_amount:  #
-                            walker_speed.append(walker_bp.get_attribute('speed').recommended_values[2])  # 
-                            # print(walker_bp.get_attribute('speed').recommended_values)
-                            # time.sleep(1000)
+                        if danger_walker_amount <= danger_amount:
+                            walker_speed.append(walker_bp.get_attribute('speed').recommended_values[2])
                         else:
                             walker_speed.append(walker_bp.get_attribute('speed').recommended_values[1])
                     else:
@@ -1021,7 +1019,6 @@ class CarlaDataProvider(object):  # pylint: disable=too-many-public-methods
         """
         Set the port to use for the traffic manager.
         """
-        seed = 0
         CarlaDataProvider._rng = random.RandomState(seed)
 
     @staticmethod

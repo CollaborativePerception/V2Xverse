@@ -136,12 +136,8 @@ class StatisticsManager(object):
 
         route_record.meta['duration_system'] = duration_time_system
         route_record.meta['duration_game'] = duration_time_game
-        route_record.meta['route_length'] = 100.0
-        try:
-            route_record.meta['route_length'] = compute_route_length(config, self.ego_car_id)
-            print('route_length:', route_record.meta['route_length'])
-        except:
-            pass
+        route_record.meta['route_length'] = compute_route_length(config, self.ego_car_id)
+
         if self._master_scenario:
             if self._master_scenario.timeout_node.timeout:
                 route_record.infractions['route_timeout'].append('Route timeout.')
@@ -167,7 +163,7 @@ class StatisticsManager(object):
                             score_penalty *= (1 - event.get_dict()['percentage'] / 100)
                             route_record.infractions['outside_route_lanes'].append(event.get_message())
 
-                        elif False: # event.get_type() == TrafficEventType.TRAFFIC_LIGHT_INFRACTION:
+                        elif event.get_type() == TrafficEventType.TRAFFIC_LIGHT_INFRACTION:
                             score_penalty *= PENALTY_TRAFFIC_LIGHT
                             route_record.infractions['red_light'].append(event.get_message())
 
@@ -175,7 +171,7 @@ class StatisticsManager(object):
                             route_record.infractions['route_dev'].append(event.get_message())
                             failure = "Agent deviated from the route"
 
-                        elif False: # event.get_type() == TrafficEventType.STOP_INFRACTION:
+                        elif event.get_type() == TrafficEventType.STOP_INFRACTION:
                             score_penalty *= PENALTY_STOP
                             route_record.infractions['stop_infraction'].append(event.get_message())
 

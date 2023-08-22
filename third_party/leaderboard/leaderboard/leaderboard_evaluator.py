@@ -12,6 +12,14 @@ Provisional code to evaluate Autonomous Agents for the CARLA Autonomous Driving 
 """
 from __future__ import print_function
 
+import numpy as np
+import random
+import torch
+np.random.seed(0)
+random.seed(0)
+torch.manual_seed(0)
+torch.cuda.manual_seed_all(0)
+
 import traceback
 import argparse
 from argparse import RawTextHelpFormatter
@@ -87,8 +95,8 @@ class LeaderboardEvaluator(object):
     ego_vehicles = []
 
     # Tunable parameters
-    client_timeout = 50.0  # in seconds 10.0 
-    wait_for_world = 100.0  # in seconds 20.0
+    client_timeout = 10.0  # in seconds
+    wait_for_world = 20.0  # in seconds
     frame_rate = 20.0      # in Hz
 
     def __init__(self, args, statistics_manager):
@@ -164,9 +172,11 @@ class LeaderboardEvaluator(object):
                 and hasattr(self, 'world') and self.world:
             # Reset to asynchronous mode
             settings = self.world.get_settings()
+            #### NOTE: change the mode from False to True
             settings.synchronous_mode = False
             settings.fixed_delta_seconds = None
             self.world.apply_settings(settings)
+            #### NOTE: change the mode from False to True
             self.traffic_manager.set_synchronous_mode(False)
 
         if self.manager:
@@ -292,6 +302,7 @@ class LeaderboardEvaluator(object):
         """
         crash_message = ""
         entry_status = "Started"
+        st = time.time()
 
         print("\n\033[1m========= Preparing {} (repetition {}) =========".format(config.name, config.repetition_index))
         print("> Setting up the agent\033[0m")
@@ -303,7 +314,8 @@ class LeaderboardEvaluator(object):
         # Set up the user's agent, and the timer to avoid freezing the simulation
         try:
             self._agent_watchdog.start()
-            agent_class_name = getattr(self.module_agent, 'get_entry_point')()  # 'AutoPilot', 'CoP3BaselineAgent'
+            # agent_class_name for example 'AutoPilot', 'CoP3BaselineAgent' .etc
+            agent_class_name = getattr(self.module_agent, 'get_entry_point')()
             log_dir = None
             self.agent_instance = getattr(self.module_agent, agent_class_name)(args.agent_config, 
                                                                                self.ego_vehicles_num,
@@ -321,6 +333,8 @@ class LeaderboardEvaluator(object):
                     log_root_dir = self.agent_instance.get_save_path()
                 except:
                     print('load save path failed')
+
+            print('Create agent instance cost {}s'.format(time.time()-st))
 
             # Log simulation information
             log_dir = os.path.join(log_root_dir,'log')
@@ -382,19 +396,19 @@ class LeaderboardEvaluator(object):
 
         # Load the world and the scenario
         try:
+            st = time.time()
             self._load_and_wait_for_world(args, config.town, config.ego_vehicles)
+            print('Load world cost {}s'.format(time.time()-st))
             if args.crazy_level != 0:
                 # crazy traffic light
                 print("crazy traffic lights")
                 [tf.set_state(carla.libcarla.TrafficLightState.Off) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"set_state")]
                 [tf.freeze(True) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"freeze")]
             self._prepare_ego_vehicles(config.ego_vehicles, False)
+            st = time.time()
             scenario = RouteScenario(world=self.world, config=config, debug_mode=args.debug, \
                 ego_vehicles_num=self.ego_vehicles_num, crazy_level=args.crazy_level, crazy_propotion=args.crazy_propotion, log_dir=log_dir, trigger_distance = args.trigger_distance)
             config.trajectory=scenario.get_new_config_trajectory()
-            # print("\n\n")
-            # print(config.trajectory)
-            # print("\n\n")
             # TODO: may be incorrect!!!
             if self.ego_vehicles_num != 1 :
                 for j in range(self.ego_vehicles_num):
@@ -402,6 +416,8 @@ class LeaderboardEvaluator(object):
             else:
                 self.statistics_manager[0].set_scenario(scenario.scenario)
 
+            print('Load scenario cost {}s'.format(time.time()-st))
+            st = time.time()
 
             # self.agent_instance._init()
             # self.agent_instance.sensor_interface = SensorInterface()
@@ -415,6 +431,7 @@ class LeaderboardEvaluator(object):
             if args.record:
                 self.client.start_recorder("{}/{}_rep{}.log".format(args.record, config.name, config.repetition_index))
             self.manager.load_scenario(scenario, self.agent_instance, config.repetition_index, self.ego_vehicles_num, save_root=config.save_path_root, sensor_tf_list=scenario.get_sensor_tf(), is_crazy=(args.crazy_level != 0))
+            print('Load scenario manager cost {}s'.format(time.time()-st))
 
         except Exception as e:
             # The scenario is wrong -> set the ejecution to crashed and stop
@@ -461,7 +478,6 @@ class LeaderboardEvaluator(object):
             print("\033[1m> Stopping the route\033[0m")
             self.manager.stop_scenario()
             #GXK111
-            # print('config0:',config.trajectory[0][0].x)
             self._register_statistics(config,  args.ego_num, args.checkpoint, entry_status, crash_message)
 
             if args.record:
@@ -515,13 +531,6 @@ class LeaderboardEvaluator(object):
         while route_indexer.peek():
             try:
                 # setup
-                import numpy as np
-                import random
-                import torch
-                np.random.seed(0)
-                random.seed(0)
-                torch.manual_seed(0)
-                torch.cuda.manual_seed_all(0)
                 config = route_indexer.next()
 
                 # run
@@ -565,8 +574,8 @@ def main():
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
     parser.add_argument('--host', default='localhost',
                         help='IP of the host server (default: localhost)')
-    parser.add_argument('--port', default='42000', help='TCP port to listen to (default: 2000)')
-    parser.add_argument('--trafficManagerPort', default='2665',
+    parser.add_argument('--port', default='40000', help='TCP port to listen to (default: 2000)')
+    parser.add_argument('--trafficManagerPort', default='4665',
                         help='Port to use for the TrafficManager (default: 8000)')
     parser.add_argument('--trafficManagerSeed', default='1',
                         help='Seed used by the TrafficManager (default: 0)')
@@ -580,7 +589,7 @@ def main():
 
     # simulation setup
     parser.add_argument('--routes',
-                        default='leaderboard/data/evaluation_routes/routes_town05_debug.xml',
+                        default='/GPFS/data/gjliu/Auto-driving/Cop3/leaderboard/data/evaluation_routes/final/town05_short_r0.xml',
                         help='Name of the route to be executed. Point to the route_xml_file to be executed.')
     parser.add_argument('--scenarios',
                         default='leaderboard/data/scenarios/town05_all_scenarios.json',
@@ -591,8 +600,8 @@ def main():
                         help='Number of repetitions per route.')
 
     # agent-related options
-    parser.add_argument("-a", "--agent", type=str, default='leaderboard/team_code/auto_pilot.py', help="Path to Agent's py file to evaluate")
-    parser.add_argument("--agent-config", type=str, default='data_collection/yamls/debug.yaml', help="Path to Agent's configuration file")
+    parser.add_argument("-a", "--agent", type=str, default='leaderboard/team_code/v2xverse_agent.py', help="Path to Agent's py file to evaluate") # 'leaderboard/team_code/auto_pilot.py'
+    parser.add_argument("--agent-config", type=str, default='leaderboard/team_code/v2xverse_config.py', help="Path to Agent's configuration file") # 'data_collection/yamls/debug.yaml'
 
     parser.add_argument("--track", type=str, default='SENSORS', help="Participation track: SENSORS, MAP")
     parser.add_argument('--resume', type=int, default=0, help='Resume execution from last checkpoint?')

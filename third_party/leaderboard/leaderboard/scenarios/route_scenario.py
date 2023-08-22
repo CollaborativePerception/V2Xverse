@@ -182,7 +182,7 @@ class RouteScenario(BasicScenario):
 
     category = "RouteScenario"
 
-    def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1, crazy_level=0,crazy_propotion=0,log_dir=None, trigger_distance=10):
+    def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1, crazy_level=0,crazy_propotion=0, trigger_distance=10, log_dir=None):
         """
         Setup all relevant parameters and create scenarios along route
         """
@@ -193,10 +193,10 @@ class RouteScenario(BasicScenario):
         self.new_config_trajectory=None
         self.crazy_level = crazy_level
         self.crazy_propotion = crazy_propotion
+        self.trigger_distance = trigger_distance
         self.sensor_tf_num = 0
         self.sensor_tf_list = []
         self.log_dir = log_dir
-        self.trigger_distance = trigger_distance
 
         self.route_dic = {}
         self.s6flag = 0
@@ -226,7 +226,6 @@ class RouteScenario(BasicScenario):
                                             debug_mode=debug_mode>1,
                                             terminate_on_failure=False,
                                             criteria_enable=criteria_enable)
-        
         print('route_scenarios:',self.route_dic)
 
     def _get_multi_tf(self, trajectory, tf_num=1) -> list:
@@ -388,18 +387,90 @@ class RouteScenario(BasicScenario):
         self.new_config_trajectory=trajectory.copy()
         return trajectory
 
+    def _cal_multi_routes_for_coslam(self, world, config):
+        trajectory=[]
+        distance_gap_straight = 12
+        distance_gap_left = 0
+        distance_gap_right = 0
+        distance_gap_rear = 0
+        route_distance = 1
+        # trajectory's element is a list of waypoint, a carla.Location object
+        trajectory.append(config.trajectory) 
+        # initialize trajectory
+        trajectory.extend([[] for _ in range(1,self.ego_vehicles_num)])
+
+        # spawn_points is a list of carla.Transform
+        spawn_points=world.get_map().get_spawn_points()
+        spawn_tensor=torch.tensor([[spawn_point.location.x,
+                       spawn_point.location.y,
+                       spawn_point.location.z 
+                    ] for spawn_point in spawn_points],dtype=float)
+
+        # calculate waypoints via knn
+        for point, waypoint in enumerate(trajectory[0]):
+            waypoint_tensor=torch.tensor([waypoint.x,waypoint.y,waypoint.z] 
+                                ,dtype=float).reshape(1,3).repeat(spawn_tensor.shape[0],1)
+            dist_tensor=((spawn_tensor-waypoint_tensor)**2).sum(dim=1,keepdim=False)
+            val,idx=dist_tensor.topk(7*self.ego_vehicles_num,
+                                        largest=False,
+                                        sorted=True
+                                        )
+            curk=0
+
+            waypoint_carla = CarlaDataProvider.get_map().get_waypoint(waypoint)
+            waypoint_start_right = waypoint_carla.get_right_lane()
+
+            # record lane in this row
+            lane_list = []
+            lane_list.append(waypoint)
+            max_lane_num = 20
+            # record lane on the right
+            for lane in range(max_lane_num):
+                waypoint_lane_changed = waypoint_carla.get_right_lane()
+                if waypoint_lane_changed.lane_type == carla.LaneType.Driving:
+                    lane_list.insert(0,waypoint_lane_changed)
+                else:
+                    break
+            # record lane on the left
+            for lane in range(max_lane_num):
+                waypoint_lane_changed = waypoint_carla.get_left_lane()
+                if waypoint_lane_changed.lane_type == carla.LaneType.Driving:
+                    lane_list.append(waypoint_lane_changed)
+                else:
+                    break
+
+            print('initial lane num:', len(lane_list))
+
+
+            for k in range(1,self.ego_vehicles_num):
+                if point == 0:
+                    trajectory[k].append(lane_list[k].transform.location)
+
+                else:
+                    if val[curk]>5.0:
+                        trajectory[k].append(waypoint)
+                    else:
+                        # _route_distance += travel_distance_route
+                        # location, travel_distance_route = get_location_in_distance_from_wp(waypoint_carla, _start_distance)
+                        trajectory[k].append(spawn_points[idx[curk]].location)
+                        curk = (curk + 1)%len(idx)
+        # route = open("route.txt",'w')
+        # route.write(str(trajectory))
+        self.new_config_trajectory=trajectory.copy()
+        return trajectory
+
     def get_new_config_trajectory(self):
-        traject = []
-        for tj in self.route:
-            trj = []
-            for wp in tj:
-                trj.append(wp[0].location)
-            traject.append(trj)
-        return traject
-        # return self.new_config_trajectory
+        # traject = []
+        # for tj in self.route:
+        #     trj = []
+        #     for wp in tj:
+        #         trj.append(wp[0].location)
+        #     traject.append(trj)
+        # return traject
+        return self.new_config_trajectory
 
     def draw_route(self):
-        fig = plt.figure()
+        fig = plt.figure(dpi=400)
         colors = ['tab:red','tab:blue','tab:orange', 'tab:purple','tab:green']
         center_x = self.route[0][0][0].location.x
         center_y = self.route[0][0][0].location.y
@@ -594,21 +665,22 @@ class RouteScenario(BasicScenario):
             return selected_scenario
 
         def select_scenario_randomly(list_scenarios):
-
+            # randomly select a scenario
+            # if scenario3 in select list, select it with a probability, if not select randomly
+            selected_scenario = None
             for scenario in list_scenarios:
-                if not scenario['name'] in self.route_dic:
-                    self.route_dic[scenario['name']] = 0
-                else:
-                    self.route_dic[scenario['name']] += 1
+                if scenario['name'] == 'Scenario3':
+                    if rgn.random()>0.0:
+                        selected_scenario = rgn.choice(list_scenarios)
+                    selected_scenario = scenario
+            selected_scenario = rgn.choice(list_scenarios)
 
-            # # randomly select a scenario
-            for scenario in list_scenarios:
-                if scenario['name'] == 'Scenario6':
-                    self.s6flag += 1
-                    if self.s6flag==5:
-                        return scenario
-            return None
-            return rgn.choice(list_scenarios)
+            if not selected_scenario['name'] in self.route_dic:
+                self.route_dic[selected_scenario['name']] = 1
+            else:
+                self.route_dic[selected_scenario['name']] += 1
+
+            return selected_scenario
 
         # The idea is to randomly sample a scenario per trigger position.
         sampled_scenarios = []
@@ -619,7 +691,7 @@ class RouteScenario(BasicScenario):
             scenario_choice = select_scenario_randomly(possible_scenarios) # random sampling
             if scenario_choice == None:
                 continue
-            print(scenario_choice['name'])
+            print('load a', scenario_choice['name'])
             del possible_scenarios[possible_scenarios.index(scenario_choice)]
             # We keep sampling and testing if this position is present on any of the scenarios.
             while position_sampled(scenario_choice, sampled_scenarios):
@@ -680,7 +752,7 @@ class RouteScenario(BasicScenario):
                                                 criteria_enable=False, timeout=timeout, trigger_distance=self.trigger_distance)
                 else:
                     scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
-                                                    criteria_enable=False, timeout=timeout)
+                                                criteria_enable=False, timeout=timeout)
                 # Do a tick every once in a while to avoid spawning everything at the same time
                 if scenario_number % scenarios_per_tick == 0:
                     if CarlaDataProvider.is_sync_mode():
@@ -748,18 +820,8 @@ class RouteScenario(BasicScenario):
         amount = town_amount[config.town] if config.town in town_amount else 0
         # amount_vehicle = amount
         amount_vehicle = int(amount)
-        amount_pedestrain = int(amount) 
-
-        vehicle_random = random.random() # 0-1
-        if vehicle_random > 0.00:
-            actor_type = 'vehicle.*'
-        else:
-            blocker_vehicle_list = ["vehicle.volkswagen.t2","vehicle.carlamotors.carlacola","vehicle.volkswagen.t2","vehicle.carlamotors.european_hgv",\
-                                    "vehicle.carlamotors.firetruck", "vehicle.ford.ambulance", "vehicle.mercedes.sprinter", "vehicle.volkswagen.t2", \
-                                    "vehicle.volkswagen.t2_2021", "vehicle.mitsubishi.fusorosa"]
-            actor_type = random.choice(blocker_vehicle_list)
-
-        new_actors_vehicle = CarlaDataProvider.request_new_batch_actors(actor_type, # 'vehicle.*'
+        amount_pedestrain = int(amount)
+        new_actors_vehicle = CarlaDataProvider.request_new_batch_actors('vehicle.*',
                                                                 amount_vehicle,
                                                                 carla.Transform(),
                                                                 autopilot=True,
@@ -768,7 +830,6 @@ class RouteScenario(BasicScenario):
                                                                 crazy_level = 0,
                                                                 crazy_propotion = 0
                                                                 )
-
         new_actors_pedestrian = CarlaDataProvider.request_new_batch_actors('walker.pedestrian.*',
                                                                 amount_pedestrain,
                                                                 carla.Transform(),

@@ -37,7 +37,7 @@ class BasicScenario(object):
         """
         self.other_actors = []
         if not self.timeout:     # pylint: disable=access-member-before-definition
-            self.timeout = 60    # If no timeout was provided, set it to 60 seconds
+            self.timeout = 600    # If no timeout was provided, set it to 60 seconds
 
         self.criteria_list = []  # List of evaluation criteria
         self.scenario = []
@@ -240,7 +240,7 @@ class Scenario(object):
     - terminate_on_failure: Terminate scenario on first failure
     """
 
-    def __init__(self, behavior, criteria, name, timeout=60, terminate_on_failure=False):
+    def __init__(self, behavior, criteria, name, timeout=600, terminate_on_failure=False):
         self.behavior = behavior
         self.test_criteria = criteria
         self.timeout = timeout

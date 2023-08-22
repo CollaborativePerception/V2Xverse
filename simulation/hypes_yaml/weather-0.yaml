@@ -1,0 +1,9 @@
+destory_hazard_actors: true
+ego_num: 2
+rgb_only: false
+save_skip_frames: 4
+waypoint_disturb: 0.2
+waypoint_disturb_seed: 2020
+weather: 0
+use_rsu: True
+change_rsu_frame: 100

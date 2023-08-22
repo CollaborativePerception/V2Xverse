@@ -475,14 +475,14 @@ class DynamicObjectCrossing(BasicScenario):
         scenario_sequence.add_child(end_condition)
 
         start_behaviour.add_child(start_condition)
-        start_behaviour.add_child(TimeOut(10))
+        start_behaviour.add_child(TimeOut(60))  # 10
         keep_velocity.add_child(actor_velocity)
         keep_velocity.add_child(actor_drive)
-        keep_velocity.add_child(TimeOut(20))
+        keep_velocity.add_child(TimeOut(60))  # 20
         keep_velocity_other.add_child(actor_start_cross_lane)
         keep_velocity_other.add_child(actor_cross_lane)
         keep_velocity_other.add_child(ego_pass_machine)
-        keep_velocity_other.add_child(TimeOut(20))
+        keep_velocity_other.add_child(TimeOut(60)) # 20
 
         return root
 

@@ -47,7 +47,7 @@ class AutonomousAgent(object):
 
         self.wallclock_t0 = None
 
-    def setup(self, path_to_conf_file, ego_vehicles_num):
+    def setup(self, path_to_conf_file, ego_vehicles_num,max_speed):
         """
         Initialize everything needed by your agent and set the track attribute to the right type:
             Track.SENSORS : CAMERAS, LIDAR, RADAR, GPS and IMU sensors are allowed

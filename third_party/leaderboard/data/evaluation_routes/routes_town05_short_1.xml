@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <routes>
-  <!-- <route id="2" town="Town05">
+  <route id="2" town="Town05">
     <waypoint x="91.399998" y="-78.099998" z="0.0" pitch="0.0" roll="0.0" yaw="270.000114"/>
     <waypoint x="41.399998" y="-28.099998" z="0.0" pitch="0.0" roll="0.0" yaw="270.000114"/>
-  </route> -->
+  </route>
   <route id="3" town="Town05">
     <waypoint x="91.399998" y="-78.099998" z="0.0" pitch="0.0" roll="0.0" yaw="270.000114"/>
     <waypoint x="41.399998" y="-128.099998" z="0.0" pitch="0.0" roll="0.0" yaw="270.000114"/>

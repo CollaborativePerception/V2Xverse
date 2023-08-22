@@ -2,7 +2,7 @@ import pathlib
 import carla
 import json
 import cv2
-
+import os
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from leaderboard.envs.sensor_interface import CallBack, OpenDriveMapReader, SpeedometerReader, SensorConfigurationInvalid
 from leaderboard.autoagents.autonomous_agent import Track
@@ -11,6 +11,15 @@ from srunner.scenariomanager.timer import GameTime
 from srunner.tools.scenario_helper import get_location_in_distance_from_wp
 from PIL import Image, ImageDraw
 import numpy as np
+from team_code.eval_utils import get_yaw_angle, boxes_to_corners_3d, get_points_in_rotated_box_3d, process_lidar_visibility
+
+from team_code.utils.map_drawing import \
+    cv2_subpixel, draw_agent, draw_road, \
+    draw_lane, road_exclude, draw_crosswalks, draw_city_objects
+from team_code.utils.map_utils import \
+    world_to_sensor, lateral_shift, list_loc2array, list_wpt2array, \
+    convert_tl_status, exclude_off_road_agents, retrieve_city_object_info, \
+    obj_in_range
 
 TPE = {
     carla.CityObjectLabel.Buildings: "Building", 
@@ -40,7 +49,8 @@ def get_rsu_point(vehicle,height=7.5):
         spawn_point = vehicle_wp.get_right_lane() 
         vehicle_wp = vehicle_wp.get_right_lane() 
     # spawn_loc = spawn_point.transform.location
-    spawn_loc, _ = get_location_in_distance_from_wp(spawn_point, 12 , False)
+    #### adjust the RSU distance.
+    spawn_loc, _ = get_location_in_distance_from_wp(spawn_point, 12, False)
     return carla.Location(
         x=spawn_loc.x,
         y=spawn_loc.y,
@@ -250,6 +260,16 @@ class SensorUnit(object):
                 "id": "depth_front",
             },
             {
+                "type": "sensor.lidar.ray_cast_semantic",
+                "x": self.camera_front_pose.location.x,
+                "y": self.camera_front_pose.location.y,
+                "z": self.camera_front_pose.location.z,
+                "roll": self.camera_front_pose.rotation.roll,
+                "pitch": 0, # self.camera_front_pose.rotation.pitch,
+                "yaw": self.camera_front_pose.rotation.yaw,
+                "id": "lidar_semantic_front",
+            },
+            {
                 "type": "sensor.camera.rgb",
                 "x": self.camera_rear_pose.location.x,
                 "y": self.camera_rear_pose.location.y,
@@ -451,9 +471,10 @@ class SensorUnit(object):
                     bp.set_attribute('channels', str(64))
                     bp.set_attribute('upper_fov', str(10))
                     bp.set_attribute('lower_fov', str(-60))
-                    bp.set_attribute('points_per_second', str(2000000))
+                    bp.set_attribute('points_per_second', str(1000000))
                     bp.set_attribute('atmosphere_attenuation_rate', str(0.004))
-                    bp.set_attribute('dropoff_general_rate', str(0.45))
+                    #### NOTE: changed, 0.45 -> 0.0
+                    bp.set_attribute('dropoff_general_rate', str(0))
                     bp.set_attribute('dropoff_intensity_limit', str(0.8))
                     bp.set_attribute('dropoff_zero_intensity', str(0.4))
                     sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
@@ -570,7 +591,12 @@ class SensorUnit(object):
             data[_id]["box"] = [box.x, box.y, box.z]
             vel = actor.get_velocity()
             data[_id]["vel"] = [vel.x, vel.y, vel.z]
-            data[_id]["tpe"] = 0
+            angle = actor.get_transform().rotation
+            data[_id]["angle"] = [angle.roll, angle.yaw, angle.pitch]
+            if actor.type_id=="vehicle.diamondback.century":
+                data[_id]["tpe"] = 3
+            else:
+                data[_id]["tpe"] = 0
 
         walkers = CarlaDataProvider.get_world().get_actors().filter("*walker.*")
         for actor in walkers:
@@ -586,12 +612,14 @@ class SensorUnit(object):
             data[_id]["box"] = [box.x, box.y, box.z]
             vel = actor.get_velocity()
             data[_id]["vel"] = [vel.x, vel.y, vel.z]
+            angle = actor.get_transform().rotation
+            data[_id]["angle"] = [angle.roll, angle.yaw, angle.pitch]
             data[_id]["tpe"] = 1
 
         lights = CarlaDataProvider.get_world().get_actors().filter("*traffic_light*")
         for actor in lights:
             loc = actor.get_location()
-            if loc.distance(self._rsu_loc) > 70:
+            if loc.distance(self._rsu_loc) > 50:
                 continue
             _id = actor.id
             data[_id] = {}
@@ -742,6 +770,7 @@ class RoadSideUnit(SensorUnit):
         self.loc_path = self.save_path_tmp / "location.json"
         # intialize folders for the sensors' data.
         (self.save_path_tmp / "lidar").mkdir(parents=True, exist_ok=True)
+        (self.save_path_tmp / "lidar_semantic_front").mkdir(parents=True, exist_ok=True)
         for sensor_type in ["rgb", "depth"]:
             for pos in ["front", "left", "right", "rear"]:
                 name = sensor_type + "_" + pos
@@ -750,57 +779,62 @@ class RoadSideUnit(SensorUnit):
         (self.save_path_tmp / "measurements").mkdir(parents=True, exist_ok=True)
         (self.save_path_tmp / "actors_data").mkdir(parents=True, exist_ok=True)
         (self.save_path_tmp / "env_actors_data").mkdir(parents=True, exist_ok=True)
+        (self.save_path_tmp / "bev_visibility").mkdir(parents=True, exist_ok=True)
         self.sensor_interface = SensorInterface()
         self._3d_bb_distance = 85
 
     def process(self,input_data,is_train=False):
         rgb_data = {}
         results = {}
-        for pos in ["front", "left", "right", "rear"]:
-            rgb_data[pos] = cv2.cvtColor(
-                input_data["rsu_{0}_rgb_{1}".format(self.id,pos)][1][:, :, :3],
-                cv2.COLOR_BGR2RGB
-            )
-            name_save = "rgb_" + pos
-            results[name_save]=rgb_data[pos]
-        results["lidar"] = input_data["rsu_{0}_lidar".format(self.id)][1]
-        # print("RSU Frame: {}".format(input_data["rsu_{0}_lidar".format(self.id)][0]))
-        if not is_train:
-            bb_3d = self._get_3d_bbs(max_distance=self._3d_bb_distance)
-            results["3d_bbs"] = bb_3d
-            results["actors_data"] = self.collect_actor_data()
-        # Other data
-        cur_lidar_pose = carla.Location(x=self.lidar_pose.location.x+self._rsu_loc.x,
-                                        y=self.lidar_pose.location.y+self._rsu_loc.y,
-                                        z=self.lidar_pose.location.z+self._rsu_loc.z)
-        # print([self._rsu_loc.x, self._rsu_loc.y, self._rsu_loc.z])
-        self.intrinsics = get_camera_intrinsic(self._rgb_sensor_data)
-        self.lidar2front = get_camera_extrinsic(self.camera_front_pose, self.lidar_pose)
-        self.lidar2left = get_camera_extrinsic(self.camera_left_pose, self.lidar_pose)
-        self.lidar2right = get_camera_extrinsic(self.camera_right_pose, self.lidar_pose)
-        self.lidar2rear = get_camera_extrinsic(self.camera_rear_pose, self.lidar_pose)
-        data = {
-            "gps_x": -self._rsu_loc.y,
-            "gps_y": self._rsu_loc.x,
-            "x": self._rsu_loc.x,
-            "y": self._rsu_loc.y,
-            "theta": np.pi/2,
-            "lidar_pose_x": cur_lidar_pose.x,
-            "lidar_pose_y": cur_lidar_pose.y,
-            "lidar_pose_z": cur_lidar_pose.z,
-            "lidar_pose_gps_x": -cur_lidar_pose.y,
-            "lidar_pose_gps_y": cur_lidar_pose.x,
-            "camera_front_intrinsics": self.intrinsics,
-            "camera_front_extrinsics": self.lidar2front,
-            "camera_left_intrinsics": self.intrinsics,
-            "camera_left_extrinsics": self.lidar2left,
-            "camera_right_intrinsics": self.intrinsics,
-            "camera_right_extrinsics": self.lidar2right,
-            "camera_rear_intrinsics": self.intrinsics,
-            "camera_rear_extrinsics": self.lidar2rear
-        }
-        results["measurements"] = data
-        return results
+        try:
+            for pos in ["front", "left", "right", "rear"]:
+                rgb_data[pos] = cv2.cvtColor(
+                    input_data["rsu_{0}_rgb_{1}".format(self.id,pos)][1][:, :, :3],
+                    cv2.COLOR_BGR2RGB
+                )
+                name_save = "rgb_" + pos
+                results[name_save]=rgb_data[pos]
+            results["lidar"] = input_data["rsu_{0}_lidar".format(self.id)][1]
+            # print("RSU Frame: {}".format(input_data["rsu_{0}_lidar".format(self.id)][0]))
+            if not is_train:
+                bb_3d = self._get_3d_bbs(max_distance=self._3d_bb_distance)
+                results["3d_bbs"] = bb_3d
+                results["actors_data"] = self.collect_actor_data()
+            # Other data
+            cur_lidar_pose = carla.Location(x=self.lidar_pose.location.x+self._rsu_loc.x,
+                                            y=self.lidar_pose.location.y+self._rsu_loc.y,
+                                            z=self.lidar_pose.location.z+self._rsu_loc.z)
+            # print([self._rsu_loc.x, self._rsu_loc.y, self._rsu_loc.z])
+            self.intrinsics = get_camera_intrinsic(self._rgb_sensor_data)
+            self.lidar2front = get_camera_extrinsic(self.camera_front_pose, self.lidar_pose)
+            self.lidar2left = get_camera_extrinsic(self.camera_left_pose, self.lidar_pose)
+            self.lidar2right = get_camera_extrinsic(self.camera_right_pose, self.lidar_pose)
+            self.lidar2rear = get_camera_extrinsic(self.camera_rear_pose, self.lidar_pose)
+            data = {
+                "gps_x": -self._rsu_loc.y,
+                "gps_y": self._rsu_loc.x,
+                "x": self._rsu_loc.x,
+                "y": self._rsu_loc.y,
+                "theta": np.pi/2,
+                "lidar_pose_x": cur_lidar_pose.x,
+                "lidar_pose_y": cur_lidar_pose.y,
+                "lidar_pose_z": cur_lidar_pose.z,
+                "lidar_pose_gps_x": -cur_lidar_pose.y,
+                "lidar_pose_gps_y": cur_lidar_pose.x,
+                "camera_front_intrinsics": self.intrinsics,
+                "camera_front_extrinsics": self.lidar2front,
+                "camera_left_intrinsics": self.intrinsics,
+                "camera_left_extrinsics": self.lidar2left,
+                "camera_right_intrinsics": self.intrinsics,
+                "camera_right_extrinsics": self.lidar2right,
+                "camera_rear_intrinsics": self.intrinsics,
+                "camera_rear_extrinsics": self.lidar2rear
+            }
+            results["measurements"] = data
+            return results
+        except:
+            print('RSU process data error')
+            return None
 
     def run_step(self, frame):
         """
@@ -826,6 +860,12 @@ class RoadSideUnit(SensorUnit):
             np.save(
                 self.save_path_tmp / "lidar" / ("%04d.npy" % frame),
                 lidar_data, allow_pickle=True,
+            )
+            lidar_semantic_front_data = input_data["rsu_{0}_lidar_semantic_front".format(self.id)][1]
+            # print("RSU Frame: {}".format(input_data["rsu_{0}_lidar".format(self.id)][0]))
+            np.save(
+                self.save_path_tmp / "lidar_semantic_front" / ("%04d.npy" % frame),
+                lidar_semantic_front_data, allow_pickle=True,
             )
             bb_3d = self._get_3d_bbs(max_distance=self._3d_bb_distance)
             np.save(
@@ -868,6 +908,26 @@ class RoadSideUnit(SensorUnit):
             json.dump(data, f, indent=4)
             f.close()
             self.actors_data = self.collect_actor_data()
+            lidar_pose = {"lidar_pose_x": data["lidar_pose_x"],
+                          "lidar_pose_y": data["lidar_pose_y"],
+                          "lidar_pose_z": data["lidar_pose_z"],
+                          "theta": data["theta"]}
+            self.actors_data, _ = process_lidar_visibility(self.actors_data, lidar_data, lidar_pose, change_actor_file=True)
+
+            self.cur_camera_front_pose = carla.Location(x=self.camera_front_pose.location.x,
+                                                y=self.camera_front_pose.location.y,
+                                                z=self.camera_front_pose.location.z)        
+            self.cur_camera_front_pose = carla.Location(x=self.cur_camera_front_pose.x+self._rsu_loc.x,
+                                            y=self.cur_camera_front_pose.y+self._rsu_loc.y,
+                                            z=self.cur_camera_front_pose.z+self._rsu_loc.z)
+
+            bev_map = self.sg_lidar_2_bevmap(input_data)
+            save_visibility_name = os.path.join(self.save_path_tmp,
+                                                'bev_visibility',
+                                                "%04d.png" % frame)
+            cv2.imwrite(save_visibility_name, bev_map)
+
+
             self.env_actors_data = self.collect_env_actor_data()
             actors_data_file = self.save_path_tmp / "actors_data" / ("%04d.json" % frame)
             f = open(actors_data_file, "w")
@@ -880,3 +940,174 @@ class RoadSideUnit(SensorUnit):
 
         else:
             return
+        
+    def sg_lidar_2_bevmap(self, input_data):
+        config = {'thresh':5,
+                  'radius_meter':50,
+                  'raster_size':[256, 256]
+                  }
+
+        # data = np.frombuffer(semantic_lidar, dtype=np.dtype([
+        #     ('x', np.float32), ('y', np.float32), ('z', np.float32),
+        #     ('CosAngle', np.float32), ('ObjIdx', np.uint32),
+        #     ('ObjTag', np.uint32)]))
+
+        # # (x, y, z, intensity)
+        # points = np.array([data['x'], data['y'], data['z']]).T
+        # obj_tag = np.array(data['ObjTag'])
+        # obj_idx = np.array(data['ObjIdx'])
+        # thresh = config['thresh']
+        # # self.data = data
+        # # self.frame = event.frame
+        # # self.timestamp = event.timestamp
+
+        # while obj_idx is None or obj_tag is None or \
+        #         obj_idx.shape[0] != obj_tag.shape[0]:
+        #     continue
+
+        # # label 10 is the vehicle
+        # vehicle_idx = obj_idx[obj_tag == 10]
+        # # each individual instance id
+        # vehicle_unique_id = list(np.unique(vehicle_idx))
+        # vehicle_id_filter = []
+
+        # for veh_id in vehicle_unique_id:
+        #     if vehicle_idx[vehicle_idx == veh_id].shape[0] > thresh:
+        #         vehicle_id_filter.append(veh_id)
+
+        semantic_lidar_pose = {"lidar_pose_x": self.cur_camera_front_pose.x,
+                        "lidar_pose_y": self.cur_camera_front_pose.y,
+                        "lidar_pose_z": self.cur_camera_front_pose.z,
+                        "theta": (self.camera_front_pose.rotation.yaw + 90)/180 * np.pi + np.pi/2}
+        self.actors_data, vehicle_id_filter = process_lidar_visibility(self.actors_data, \
+            input_data["rsu_{0}_lidar_semantic_front".format(self.id)][1], semantic_lidar_pose, change_actor_file=True, mode='camera', thresh = 5)
+
+        self.radius_meter = config['radius_meter']
+        self.raster_size = np.array(config['raster_size'])
+
+        self.pixels_per_meter = self.raster_size[0] / (self.radius_meter * 2)
+
+        meter_per_pixel = 1 / self.pixels_per_meter
+        raster_radius = \
+            float(np.linalg.norm(self.raster_size *
+                                 np.array([meter_per_pixel,
+                                           meter_per_pixel]))) / 2
+        dynamic_agents = self.load_agents_world(raster_radius)
+        final_agents = dynamic_agents
+
+        # final_agents = agents_in_range(raster_radius,
+        #                                     dynamic_agents)
+        
+        corner_list = []
+        for agent_id, agent in final_agents.items():
+            # in case we don't want to draw the cav itself
+            # if not agent_id in vehicle_id_filter:
+            #     continue
+            agent_corner = self.generate_agent_area(agent['corners'])
+            corner_list.append(agent_corner)
+
+        self.vis_mask = 255 * np.zeros(
+            shape=(self.raster_size[1], self.raster_size[0], 3),
+            dtype=np.uint8)
+
+        self.vis_mask = draw_agent(corner_list, self.vis_mask)
+
+        return self.vis_mask
+    
+    def load_agents_world(self, max_distance=50):
+        """
+        Load all the dynamic agents info from server directly
+        into a  dictionary.
+
+        Returns
+        -------
+        The dictionary contains all agents info in the carla world.
+        """
+
+        vehicle_list = CarlaDataProvider.get_world().get_actors().filter('vehicle.*')
+        walker_list = CarlaDataProvider.get_world().get_actors().filter("*walker.*")
+        
+        dynamic_agent_info = {}
+
+        def read_actors_corner(agent_list, agent_info):
+            for agent in agent_list:
+                loc = agent.get_location()
+                if loc.distance(self._rsu_loc) > 50:
+                    continue
+                agent_id = agent.id
+
+                agent_transform = agent.get_transform()
+
+                type_id = agent.type_id
+                if not 'walker' in type_id:
+                    agent_loc = [agent_transform.location.x,
+                                agent_transform.location.y,
+                                agent_transform.location.z - agent.bounding_box.extent.z, ]
+                else:
+                    agent_loc = [agent_transform.location.x,
+                                agent_transform.location.y,
+                                agent_transform.location.z, ]                
+
+                agent_yaw = agent_transform.rotation.yaw
+
+                # calculate 4 corners
+                bb = agent.bounding_box.extent
+                corners = [
+                    carla.Location(x=-bb.x, y=-bb.y),
+                    carla.Location(x=-bb.x, y=bb.y),
+                    carla.Location(x=bb.x, y=bb.y),
+                    carla.Location(x=bb.x, y=-bb.y)
+                ]
+                # corners are originally in ego coordinate frame, convert to
+                # world coordinate
+                agent_transform.transform(corners)
+                corners_reformat = [[x.x, x.y, x.z] for x in corners]
+
+                agent_info[agent_id] = {'location': agent_loc,
+                                                'yaw': agent_yaw,
+                                                'corners': corners_reformat}
+            return agent_info
+
+        dynamic_agent_info = read_actors_corner(vehicle_list, dynamic_agent_info)
+        dynamic_agent_info = read_actors_corner(walker_list, dynamic_agent_info)            
+
+        return dynamic_agent_info
+    
+    def generate_agent_area(self, corners):
+        """
+        Convert the agent's bbx corners from world coordinates to
+        rasterization coordinates.
+
+        Parameters
+        ----------
+        corners : list
+            The four corners of the agent's bbx under world coordinate.
+
+        Returns
+        -------
+        agent four corners in image.
+        """
+        # (4, 3) numpy array
+        corners = np.array(corners)
+        # for homogeneous transformation
+        corners = corners.T
+        corners = np.r_[
+            corners, [np.ones(corners.shape[1])]]
+        # convert to ego's coordinate frame
+        corners = world_to_sensor(corners, carla.Transform()).T
+        corners = corners[:, :2]
+
+        # switch x and y
+        corners = corners[..., ::-1]
+        # y revert
+        corners[:, 1] = -corners[:, 1]
+
+        corners[:, 0] = corners[:, 0] * self.pixels_per_meter + \
+                        self.raster_size[0] // 2
+        corners[:, 1] = corners[:, 1] * self.pixels_per_meter + \
+                        self.raster_size[1] // 2
+
+        # to make more precise polygon
+        corner_area = cv2_subpixel(corners[:, :2])
+
+        return corner_area

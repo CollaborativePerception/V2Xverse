@@ -162,7 +162,8 @@ class AutoPilot(MapAgent):
         self._stop_completed.extend([False for _ in range(self.ego_vehicles_num)])
         self._affected_by_stop.extend([False for _ in range(self.ego_vehicles_num)])
 
-
+        self.control_time = []
+        self.save_data_time = []
 
         lights_list = self._world.get_actors().filter("*traffic_light*")
         self._map = self._world.get_map()
@@ -299,30 +300,36 @@ class AutoPilot(MapAgent):
         if not self.initialized:
             self._init()
 
+        # record control time and time for data saving
+        c_time = 0
+        s_time = 0
+
         control_all = []
         control_all.extend([[] for _ in range(0,self.ego_vehicles_num)])
         self.step += 1
         # delete rsu and spawn new ones
-        if self.step % self.change_rsu_frame == 0:
-            if self.first_generate_rsu:
-                self.first_generate_rsu = False
-            else:
-                # destroy previous rsu sensor except the first entry
-                [self.rsu[vehicle_num].cleanup() for vehicle_num in range(self.ego_vehicles_num)]
-                self.rsu=[]
-            # handle the initialization issue
-            for vehicle_num in range(self.ego_vehicles_num):
-                # generate rsu
-                vehicle = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
-                # spawn rsu
-                self.rsu.append(RoadSideUnit(save_path=self.get_save_path(),
-                                                id=int((self.step/self.change_rsu_frame+1)*1000+vehicle_num),
-                                                is_None=(vehicle is None)))
-                if vehicle is not None:
-                    spawn_loc = get_rsu_point(vehicle)
-                    self.rsu[vehicle_num].setup_sensors(parent=None, spawn_point=spawn_loc)
+        if self.use_rsu:
+            if self.step % self.change_rsu_frame == 0:
+                if self.first_generate_rsu:
+                    self.first_generate_rsu = False
+                else:
+                    # destroy previous rsu sensor except the first entry
+                    [self.rsu[vehicle_num].cleanup() for vehicle_num in range(self.ego_vehicles_num)]
+                    self.rsu=[]
+                # handle the initialization issue
+                for vehicle_num in range(self.ego_vehicles_num):
+                    # generate rsu
+                    vehicle = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
+                    # spawn rsu
+                    self.rsu.append(RoadSideUnit(save_path=self.get_save_path(),
+                                                    id=int((self.step/self.change_rsu_frame+1)*1000+vehicle_num),
+                                                    is_None=(vehicle is None)))
+                    if vehicle is not None:
+                        spawn_loc = get_rsu_point(vehicle)
+                        self.rsu[vehicle_num].setup_sensors(parent=None, spawn_point=spawn_loc)
 
         for vehicle_num in range(self.ego_vehicles_num):
+            st = time.time()
             self._vehicle = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num) # current hero
             if self._vehicle is None:
             # if not self._vehicle.is_alive:
@@ -362,6 +369,7 @@ class AutoPilot(MapAgent):
             control.throttle = throttle
             control.brake = float(brake)
 
+            c_time += time.time()-st
             # print('step:{}, ego:{}, steer:{}, throttle:{}, brake:{}'.format(self.step, vehicle_num,control.steer,control.throttle,control.brake))
 
             self.birdview = BirdViewProducer.as_rgb(
@@ -369,7 +377,8 @@ class AutoPilot(MapAgent):
             )
 
             if self.step % self.save_skip_frames == 0 and self.save_path is not None:
-                if self.step % self.change_rsu_frame != 0:
+                st = time.time()
+                if self.step % self.change_rsu_frame != 0 and self.use_rsu:
                     self.rsu[vehicle_num].run_step(frame=self.step // self.save_skip_frames)
                 self.save_frame = self.save(
                     near_node,
@@ -382,20 +391,22 @@ class AutoPilot(MapAgent):
                     data,
                     mode='all'
                 )
+                s_time += time.time()-st
             else:
                 self.save_frame = None
-                self.rsu[vehicle_num].tick() # tick but not save
-                self.save(
-                    near_node,
-                    far_node,
-                    near_command,
-                    steer,
-                    throttle,
-                    brake,
-                    target_speed,
-                    data,
-                    mode='measurement'
-                )
+                if self.use_rsu:
+                    self.rsu[vehicle_num].tick() # tick but not save
+                # self.save(
+                #     near_node,
+                #     far_node,
+                #     near_command,
+                #     steer,
+                #     throttle,
+                #     brake,
+                #     target_speed,
+                #     data,
+                #     mode='measurement'
+                # )
 
             if self.destory_hazard_actors:
                 try:
@@ -404,6 +415,11 @@ class AutoPilot(MapAgent):
                 except:
                     print('destroy hazard actors failed')
             control_all[vehicle_num]=control
+
+        self.control_time.append(c_time)
+        if s_time > 0 or len(self.save_data_time) == 0:
+            self.save_data_time.append(s_time)
+        print('frame {}, save time {}s'.format(self.step, sum(self.save_data_time)/len(self.save_data_time)))
 
         return control_all
 

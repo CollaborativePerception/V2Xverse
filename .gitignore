@@ -169,3 +169,7 @@ cython_debug/
 data/  # folder
 data  # symbolic link
 work_dirs/
+
+# data generation
+simulation/data_collection/yamls/
+third_party/birdview_v2_cache/

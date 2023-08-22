@@ -82,6 +82,12 @@ class ScenarioManager(object):
         self.prev_ego_trans = None
         self.first_entry = []
         self.set_flag = True
+
+        # record simulation time cost
+        self.time_record = []
+        self.c_time_record = []
+        self.a_time_record = []
+        self.sc_time_record = []
         
     def signal_handler(self, signum, frame):
         """
@@ -147,6 +153,7 @@ class ScenarioManager(object):
         self._running = True
         # print(CarlaDataProvider.get_hero_actor(hero_id=0).is_alive)
         while self._running:
+            st = time.time()
             timestamp = None
             world = CarlaDataProvider.get_world()
             if world:
@@ -159,6 +166,10 @@ class ScenarioManager(object):
                     timestamp = snapshot.timestamp
             if timestamp:
                 self._tick_scenario(timestamp)
+
+            self.time_record.append(time.time()-st)
+            print('total single frame time: {}s, average time {}s'.format(time.time()-st, sum(self.time_record)/len(self.time_record)))
+            print('agent time: {}s, control time {}s, scenario time {}s'.format(sum(self.a_time_record)/len(self.a_time_record), sum(self.c_time_record)/len(self.c_time_record), sum(self.sc_time_record)/len(self.sc_time_record)))
 
     def _tick_scenario(self, timestamp):
         """
@@ -175,7 +186,10 @@ class ScenarioManager(object):
 
             # to be done
             try:
+                st = time.time()
                 ego_action = self._agent()
+                self.a_time_record.append(time.time()-st)
+
 
             # Special exception inside the agent that isn't caused by the agent
             except SensorReceivedNoData as e:
@@ -202,10 +216,12 @@ class ScenarioManager(object):
                 # if self.scenario_tree[vehicle_num].status == py_trees.common.Status.RUNNING \
                 #        or self.scenario_tree[vehicle_num].status == py_trees.common.Status.INVALID:
                 try:
+                    st = time.time()
                     ego = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
                     if ego and ego.is_alive:
                     # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
                         self.ego_vehicles[vehicle_num].apply_control(ego_action[vehicle_num])
+                    self.c_time_record.append(time.time()-st)
                 except:
                     pass
 
@@ -215,12 +231,14 @@ class ScenarioManager(object):
                 #        or self.scenario_tree[vehicle_num].status == py_trees.common.Status.INVALID:
                 
                 try:
+                    st = time.time()
                     ego = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
                     if ego and ego.is_alive:
                     # print("enter the tree")
                     # print(CarlaDataProvider.get_hero_actor(hero_id=vehicle_num))
                     # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
                         self.scenario_tree[vehicle_num].tick_once()
+                    self.sc_time_record.append(time.time()-st)
                 except:
                     pass
 

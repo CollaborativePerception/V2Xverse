@@ -30,8 +30,10 @@ from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import (get_geometric_linear_intersection,
                                            get_crossing_point,
                                            generate_target_waypoint)
+from . import ScenarioClassRegistry
 
 
+@ScenarioClassRegistry.register
 class SignalizedJunctionRightTurn(BasicScenario):
 
     """

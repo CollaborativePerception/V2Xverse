@@ -30,8 +30,9 @@ from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (I
 from srunner.scenariomanager.timer import TimeOut
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import get_location_in_distance_from_wp
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class StationaryObjectCrossing(BasicScenario):
 
     """
@@ -57,7 +58,8 @@ class StationaryObjectCrossing(BasicScenario):
         self._other_actor_target_velocity = 10 + 5
         # Timeout of scenario in seconds
         self.timeout = timeout
-
+        # TODO(GJH):Add start distance as a parameter
+        # self._start_distance = config._start_distance
         super(StationaryObjectCrossing, self).__init__("Stationaryobjectcrossing",
                                                        ego_vehicles,
                                                        config,
@@ -70,6 +72,8 @@ class StationaryObjectCrossing(BasicScenario):
         Custom initialization
         """
         _start_distance = 40
+        # TODO(GJH):Add start distance as a parameter
+        # _start_distance = self._start_distance
         lane_width = self._reference_waypoint.lane_width
         location, _ = get_location_in_distance_from_wp(self._reference_waypoint, _start_distance)
         waypoint = self._wmap.get_waypoint(location)
@@ -132,7 +136,7 @@ class StationaryObjectCrossing(BasicScenario):
         """
         self.remove_all_actors()
 
-
+@ScenarioClassRegistry.register
 class DynamicObjectCrossing(BasicScenario):
 
     """

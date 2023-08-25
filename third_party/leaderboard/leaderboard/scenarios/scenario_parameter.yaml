@@ -1,0 +1,82 @@
+Scenario1: 
+    ControlLoss:
+        propotion: 1.0 # Proportion of the scenario in Scenario1
+        _no_of_jitter: 10 # Number of jittering for the vehicle
+        _noise_mean: 0 # Mean of the noise
+        _noise_std: 0.01 # Standard deviation of the noise
+        _dynamic_mean_for_steer: 0.001 # Mean of the dynamic noise for steer
+        _dynamic_mean_for_throttle: 0.045 # Mean of the dynamic noise for throttle
+        _abort_distance_to_intersection: 10 # Distance to the intersection to abort the scenario
+        _start_distance: 20 # Distance the vehicle should travel before the scenario starts 
+        _trigger_dist: 2 # Distance to the trigger point to trigger the scenario
+        _end_distance: 30 # Distance the vehicle should travel before the scenario ends
+        _ego_vehicle_max_steer: 0.0 # Set but not used in this scenario
+        _ego_vehicle_max_throttle: 1.0 # Set but not used in this scenario
+        _ego_vehicle_target_velocity: 15 # Set but not used in this scenario
+        _distance: [14,48,74] # Distance between the noise points and the trigger point
+
+Scenario2: 
+    FollowLeadingVehicle:
+        propotion: 0.5 # Proportion of the scenario in Scenario2
+        _first_vehicle_location: 25 # Location of the first vehicle
+        _first_vehicle_speed: 10 # Speed of the first vehicle
+        _other_actor_max_brake: 1.0 # Max brake speed of the other actor
+        _other_actor_stop_in_front_intersection: 20 # Distance to the intersection to stop the other actor
+        _trigger_distance: 20 # Distance between the leadig actor and the hero actor to end the scenario
+    
+    FollowLeadingVehicleWithObstacle:
+        propotion: 0.5 # Proportion of the scenario in Scenario2
+        _first_actor_location: 25 # Location of the first vehicle
+        _second_head_distance: 41 # Distance between the first and second vehicle
+        _second_actor_location: 66 # Location of the second vehicle: _second_actor_location = _first_actor_location + _second_head_distance
+        _first_actor_speed: 10 # Speed of the first vehicle
+        _second_actor_speed: 1.5 # Speed of the second vehicle
+        _other_actor_max_brake: 1.0 # Max brake speed of the other actor
+
+Scenario3: 
+    StationaryObjectCrossing:
+        propotion: 0.0 # Proportion of the scenario in Scenario3
+        _ego_vehicle_distance_driven: 40 # Distance the ego vehicle should drive before the scenario ends
+        _other_actor_target_velocity: 15 # Target velocity of the other actor
+        _start_distance: 40 # Distance between the trigger point and the static object
+    
+    DynamicObjectCrossing:
+        propotion: 1.0 # Proportion of the scenario in Scenario3
+        trigger_distance: 10 # Distance between the trigger point and the dynamic object
+        _ego_vehicle_distance_driven: 40 # Distance the ego vehicle should drive before the scenario ends
+        _other_actor_target_velocity: 3 # Target velocity of the other actor
+        _other_actor_max_brake: 1.0 # Max brake speed of the other actor
+        _time_to_reach: 10 # Time to reach the dynamic object(one lane each)
+        _adversary_type: False # # flag to select either pedestrian (False) or cyclist (True)
+        _walker_yaw: 0 # Yaw of the walker
+        _num_lane_changes: 1 # Number of lane changes
+        _number_of_attempts: 500 # Number of attempts to find a valid scenario
+
+Scenario4: 
+    VehicleTurningRight:
+        propotion: 0.0 # Proportion of the scenario in Scenario4
+        _other_actor_target_velocity: 3 # Target velocity of the other actor
+        _number_of_attempts: 500 # Number of attempts to find a valid scenario
+    VehicleTurningLeft:
+        propotion: 0.0 # Proportion of the scenario in Scenario4
+
+    VehicleTurningRoute:
+        propotion: 0.0 # Proportion of the scenario in Scenario4
+      
+# "Scenario5": 
+#     OtherLeadingVehicle
+
+# "Scenario6": 
+#     ManeuverOppositeDirection
+
+# "Scenario7": 
+#     SignalJunctionCrossingRoute
+
+# "Scenario8": 
+#     SignalJunctionCrossingRoute
+
+# "Scenario9": 
+#     SignalJunctionCrossingRoute
+
+# "Scenario10": 
+#     NoSignalJunctionCrossingRoute

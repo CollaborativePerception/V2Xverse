@@ -23,8 +23,10 @@ from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (ActorTrans
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import InTriggerRegion
 from srunner.scenarios.basic_scenario import BasicScenario
+from . import ScenarioClassRegistry
 
 
+@ScenarioClassRegistry.register
 class NoSignalJunctionCrossing(BasicScenario):
 
     """

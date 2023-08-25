@@ -25,8 +25,9 @@ from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTes
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import DriveDistance
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import generate_target_waypoint
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class SignalizedJunctionLeftTurn(BasicScenario):
 
     """

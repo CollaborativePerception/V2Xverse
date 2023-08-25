@@ -31,6 +31,7 @@ from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import generate_target_waypoint, generate_target_waypoint_in_route
 from srunner.tools.scenario_helper import get_location_in_distance_from_wp,get_location_previous_from_wp,generate_target_waypoint_and_roadoption_in_route
 from agents.navigation.local_planner import RoadOption
+from . import ScenarioClassRegistry
 
 def get_opponent_transform(added_dist, waypoint, trigger_location):
     """
@@ -131,6 +132,8 @@ def is_lane_a_parking(waypoint):
 
     return False
 
+
+@ScenarioClassRegistry.register
 class VehicleTurningRight(BasicScenario):
 
     """
@@ -394,7 +397,7 @@ class VehicleTurningRight(BasicScenario):
         """
         self.remove_all_actors()
 
-
+@ScenarioClassRegistry.register
 class VehicleTurningLeft(BasicScenario):
 
     """
@@ -562,7 +565,7 @@ class VehicleTurningLeft(BasicScenario):
         """
         self.remove_all_actors()
 
-
+@ScenarioClassRegistry.register
 class VehicleTurningRoute(BasicScenario):
 
     """

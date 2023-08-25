@@ -32,8 +32,9 @@ from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTes
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import DriveDistance
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import get_waypoint_in_distance
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class ManeuverOppositeDirection(BasicScenario):
 
     """

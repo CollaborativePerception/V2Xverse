@@ -31,8 +31,10 @@ from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import (get_crossing_point,
                                            get_geometric_linear_intersection,
                                            generate_target_waypoint_list)
+from . import ScenarioClassRegistry
 
 
+@ScenarioClassRegistry.register
 class OppositeVehicleRunningRedLight(BasicScenario):
 
     """

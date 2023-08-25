@@ -36,8 +36,10 @@ from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (I
 from srunner.scenariomanager.timer import TimeOut
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import get_waypoint_in_distance
+from common.registry import Registry
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class FollowLeadingVehicle(BasicScenario):
 
     """
@@ -66,7 +68,9 @@ class FollowLeadingVehicle(BasicScenario):
         self._other_actor_transform = None
         # Timeout of scenario in seconds
         self.timeout = timeout
-
+        # TODO(GJH): Add _trigger_distance as a parameter
+        # self._trigger_distance = config["_trigger_distance"]
+        self._trigger_distance = 20
         super(FollowLeadingVehicle, self).__init__("FollowVehicle",
                                                    ego_vehicles,
                                                    config,
@@ -136,7 +140,7 @@ class FollowLeadingVehicle(BasicScenario):
                                                     policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ALL)
         endcondition_part1 = InTriggerDistanceToVehicle(self.other_actors[0],
                                                         self.ego_vehicles[0],
-                                                        distance=20,
+                                                        distance = self._trigger_distance,
                                                         name="FinalDistance")
         endcondition_part2 = StandStill(self.ego_vehicles[0], name="StandStill", duration=1)
         endcondition.add_child(endcondition_part1)
@@ -171,7 +175,7 @@ class FollowLeadingVehicle(BasicScenario):
         """
         self.remove_all_actors()
 
-
+@ScenarioClassRegistry.register
 class FollowLeadingVehicleWithObstacle(BasicScenario):
 
     """

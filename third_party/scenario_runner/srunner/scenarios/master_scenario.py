@@ -20,8 +20,10 @@ from srunner.scenariomanager.scenarioatomics.atomic_criteria import (CollisionTe
                                                                      RunningStopTest,
                                                                      ActorSpeedAboveThresholdTest)
 from srunner.scenarios.basic_scenario import BasicScenario
+from . import ScenarioClassRegistry
 
 
+@ScenarioClassRegistry.register
 class MasterScenario(BasicScenario):
 
     """

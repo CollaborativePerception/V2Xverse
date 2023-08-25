@@ -31,8 +31,9 @@ from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTes
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import InTriggerDistanceToVehicle, StandStill
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import get_waypoint_in_distance
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class ChangeLane(BasicScenario):
 
     """
@@ -47,7 +48,7 @@ class ChangeLane(BasicScenario):
 
     timeout = 1200
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,scenario_parameter=None,\
                  timeout=600):
         """
         Setup all relevant parameters and create scenario

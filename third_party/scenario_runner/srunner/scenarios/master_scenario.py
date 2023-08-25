@@ -20,8 +20,10 @@ from srunner.scenariomanager.scenarioatomics.atomic_criteria import (CollisionTe
                                                                      RunningStopTest,
                                                                      ActorSpeedAboveThresholdTest)
 from srunner.scenarios.basic_scenario import BasicScenario
+from . import ScenarioClassRegistry
 
 
+@ScenarioClassRegistry.register
 class MasterScenario(BasicScenario):
 
     """
@@ -32,7 +34,7 @@ class MasterScenario(BasicScenario):
 
     radius = 10.0           # meters
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,scenario_parameter=None,
                  timeout=300):
         """
         Setup all relevant parameters and create scenario

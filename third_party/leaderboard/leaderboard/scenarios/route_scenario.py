@@ -18,7 +18,7 @@ import numpy.random as random
 import torch
 import py_trees
 import matplotlib.pyplot as plt
-
+import numpy as np
 import carla
 
 from agents.navigation.local_planner import RoadOption
@@ -49,6 +49,8 @@ from srunner.tools.scenario_helper import get_location_in_distance_from_wp
 from leaderboard.utils.route_parser import RouteParser, TRIGGER_THRESHOLD, TRIGGER_ANGLE_THRESHOLD
 from leaderboard.utils.route_manipulation import interpolate_trajectory
 from leaderboard.sensors.fixed_sensors import TrafficLightSensor
+from third_party.scenario_runner.srunner.scenarios import ScenarioClassRegistry
+
 
 ROUTESCENARIO = ["RouteScenario"]
 
@@ -109,6 +111,31 @@ def convert_json_to_transform(actor_dict):
     return carla.Transform(location=carla.Location(x=float(actor_dict['x']), y=float(actor_dict['y']),
                                                    z=float(actor_dict['z'])),
                            rotation=carla.Rotation(roll=0.0, pitch=0.0, yaw=float(actor_dict['yaw'])))
+
+# NOTE（GJH): Select the scenario according to the propotion of each scenario
+def selScenario(scenario_config: dict) -> str:
+    """
+    
+    Select a scenario according to the propotion of each scenario
+
+    Args:
+        scenario_config: a dict of scenario definition config containing propotion in this Scenario
+
+    Returns:
+        selected_scenario: a string of selected scenario
+
+    """
+    try:
+        scenarios = list(scenario_config.keys())
+        scenario_propotion = []
+        for scenario_name in scenarios:
+            scenario_propotion.append(scenario_config[scenario_name]["propotion"])
+        return np.random.choice(scenarios, 1, p=scenario_propotion).tolist()[0]
+    except Exception as e:
+        print("Select Scenario Error: ", e, "Using the first scenario in the config file.")
+        scenarios = list(scenario_config.keys())
+        print(scenarios)
+        return scenarios[0]
 
 
 def convert_json_to_actor(actor_dict):
@@ -182,7 +209,7 @@ class RouteScenario(BasicScenario):
 
     category = "RouteScenario"
 
-    def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1, crazy_level=0,crazy_propotion=0,log_dir=None, trigger_distance=10):
+    def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1, crazy_level=0,crazy_propotion=0,log_dir=None, scenario_parameter=None,trigger_distance=10):
         """
         Setup all relevant parameters and create scenarios along route
         """
@@ -197,7 +224,8 @@ class RouteScenario(BasicScenario):
         self.sensor_tf_list = []
         self.log_dir = log_dir
         self.trigger_distance = trigger_distance
-
+        # TODO(gjh)：Define ScenarioConfiguration
+        self.scenario_parameter = scenario_parameter
         self.route_dic = {}
         self.s6flag = 0
 
@@ -213,12 +241,22 @@ class RouteScenario(BasicScenario):
         # # update ego_num, for some ego may fail to spawn
         # self.ego_vehicles_num = len(ego_vehicles)
 
-        self.list_scenarios = self._build_scenario_instances(world,
+        # NOTE(GJH): Add the following code to support scenario_parameter 
+        if self.scenario_parameter is not None:
+            self.list_scenarios = self._build_scenario_parameter_instances(world,
                                                              ego_vehicles,
                                                              self.sampled_scenarios_definitions,
                                                              scenarios_per_tick=10,
                                                              timeout=self.timeout,
-                                                             debug_mode=debug_mode>1)
+                                                             debug_mode=debug_mode>1,
+                                                             scenario_parameter=self.scenario_parameter)
+        else:
+            self.list_scenarios = self._build_scenario_instances(world,
+                                                                ego_vehicles,
+                                                                self.sampled_scenarios_definitions,
+                                                                scenarios_per_tick=10,
+                                                                timeout=self.timeout,
+                                                                debug_mode=debug_mode>1)
         super(RouteScenario, self).__init__(name=config.name,
                                             ego_vehicles=ego_vehicles,
                                             config=config,
@@ -448,7 +486,7 @@ class RouteScenario(BasicScenario):
             potential_scenarios_definition, _ = RouteParser.scan_route_for_scenarios(
                 config.town, r, world_annotations)
             potential_scenarios_definitions.append(potential_scenarios_definition)
-
+        # print(potential_scenarios_definitions)
         # self.route is a list of ego_vehicles' routes
         self.route = route
         if self.log_dir is not None:
@@ -607,7 +645,7 @@ class RouteScenario(BasicScenario):
                     self.s6flag += 1
                     if self.s6flag==5:
                         return scenario
-            return None
+            # return None
             return rgn.choice(list_scenarios)
 
         # The idea is to randomly sample a scenario per trigger position.
@@ -619,7 +657,7 @@ class RouteScenario(BasicScenario):
             scenario_choice = select_scenario_randomly(possible_scenarios) # random sampling
             if scenario_choice == None:
                 continue
-            print(scenario_choice['name'])
+            # print(scenario_choice['name'])
             del possible_scenarios[possible_scenarios.index(scenario_choice)]
             # We keep sampling and testing if this position is present on any of the scenarios.
             while position_sampled(scenario_choice, sampled_scenarios):
@@ -655,6 +693,7 @@ class RouteScenario(BasicScenario):
 
             for scenario_number, definition in enumerate(scenario_definition):
                 # Get the class possibilities for this scenario number
+                # TODO(gjh): USE REGISTRY TO DEFINE SCENARIOS
                 scenario_class = NUMBER_CLASS_TRANSLATION[definition['name']]
 
                 # Create the other actors that are going to appear
@@ -675,6 +714,7 @@ class RouteScenario(BasicScenario):
                 route_var_name = "ScenarioRouteNumber{}".format(scenario_number)
                 scenario_configuration.route_var_name = route_var_name
                 # try:
+                # TODO(GJH):Use scenario_config.yaml to define scenarios
                 if definition['name']=='Scenario3':
                     scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
                                                 criteria_enable=False, timeout=timeout, trigger_distance=self.trigger_distance)
@@ -696,6 +736,86 @@ class RouteScenario(BasicScenario):
             scenario_instance_vecs.append(scenario_instance_vec)
 
         return scenario_instance_vecs
+
+    def _build_scenario_parameter_instances(self, world:carla.libcarla.World, ego_vehicles:list, scenario_definitions:list,
+                                  scenarios_per_tick:int=5, timeout:int=300, debug_mode:bool=False, scenario_parameter:dict=None)->list:
+        """
+        Based on the parsed route and possible scenarios, build all the scenario classes.
+
+        Args:
+            world: carla world
+            ego_vehicles: list of ego_vehicles
+            scenario_definitions: list of scenario_definitions
+            scenarios_per_tick: number of scenarios per tick
+            timeout: number of timeout
+            debug_mode: if open debug_mode
+            scenario_parameter: a dict of predefined scenario_parameter in yaml file
+
+        Returns:
+            scenario_instance_vecs: list of scenario_instance_vecs
+        """
+        scenario_instance_vecs = []
+        for j in range(len(scenario_definitions)):
+            scenario_definition = scenario_definitions[j]
+            scenario_instance_vec = []
+            if debug_mode:
+                for scenario in scenario_definition:
+                    loc = carla.Location(scenario['trigger_position']['x'],
+                                        scenario['trigger_position']['y'],
+                                        scenario['trigger_position']['z']) + carla.Location(z=2.0)
+                    world.debug.draw_point(loc, size=0.3, color=carla.Color(255, 0, 0), life_time=100000)
+                    world.debug.draw_string(loc, str(scenario['name']), draw_shadow=False,
+                                            color=carla.Color(0, 0, 255), life_time=100000, persistent_lines=True)
+
+            for scenario_number, definition in enumerate(scenario_definition):
+                # Get the class possibilities for this scenario number
+                # NOTE(GJH): Use scenario_config.yaml to define scenarios
+                scenario = scenario_parameter[definition['name']]
+                scenario_class_name = selScenario(scenario)
+                scenario_class = ScenarioClassRegistry[scenario_class_name]
+                scenario_class_parameter = scenario[scenario_class_name]
+                # Create the other actors that are going to appear
+                if definition['other_actors'] is not None:
+                    list_of_actor_conf_instances = self._get_actors_instances(definition['other_actors'])
+                else:
+                    list_of_actor_conf_instances = []
+                # Create an actor configuration for the ego-vehicle trigger position
+
+                egoactor_trigger_position = convert_json_to_transform(definition['trigger_position'])
+                scenario_configuration = ScenarioConfiguration()
+                scenario_configuration.other_actors = list_of_actor_conf_instances
+                scenario_configuration.trigger_points = [egoactor_trigger_position]
+                scenario_configuration.subtype = definition['scenario_type']
+                scenario_configuration.ego_vehicle = ActorConfigurationData('vehicle.lincoln.mkz2017',
+                                                                            ego_vehicles[j].get_transform(),
+                                                                            'hero_{}'.format(j))
+                route_var_name = "ScenarioRouteNumber{}".format(scenario_number)
+                scenario_configuration.route_var_name = route_var_name
+                
+                scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
+                                                    criteria_enable=False, timeout=timeout, scenario_parameter=scenario_class_parameter)
+                # if definition['name']=='Scenario3':
+                #     scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
+                #                                 criteria_enable=False, timeout=timeout, trigger_distance=self.trigger_distance)
+                # else:
+                #     scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
+                #                                     criteria_enable=False, timeout=timeout)
+                # Do a tick every once in a while to avoid spawning everything at the same time
+                if scenario_number % scenarios_per_tick == 0:
+                    if CarlaDataProvider.is_sync_mode():
+                        world.tick()
+                    else:
+                        world.wait_for_tick()
+
+                # except Exception as e:
+                #     print("Skipping scenario '{}' due to setup error: {}".format(definition['name'], e))
+                #     continue
+
+                scenario_instance_vec.append(scenario_instance)
+            scenario_instance_vecs.append(scenario_instance_vec)
+
+        return scenario_instance_vecs
+
 
     def _get_actors_instances(self, list_of_antagonist_actors):
         """

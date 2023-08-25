@@ -169,3 +169,9 @@ cython_debug/
 data/  # folder
 data  # symbolic link
 work_dirs/
+
+# cache
+birdview_v2_cache/
+
+# root
+external_paths/

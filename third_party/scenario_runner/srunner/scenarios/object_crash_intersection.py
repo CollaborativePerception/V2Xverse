@@ -31,6 +31,7 @@ from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import generate_target_waypoint, generate_target_waypoint_in_route
 from srunner.tools.scenario_helper import get_location_in_distance_from_wp,get_location_previous_from_wp,generate_target_waypoint_and_roadoption_in_route
 from agents.navigation.local_planner import RoadOption
+from . import ScenarioClassRegistry
 
 def get_opponent_transform(added_dist, waypoint, trigger_location):
     """
@@ -131,6 +132,8 @@ def is_lane_a_parking(waypoint):
 
     return False
 
+
+@ScenarioClassRegistry.register
 class VehicleTurningRight(BasicScenario):
 
     """
@@ -143,27 +146,38 @@ class VehicleTurningRight(BasicScenario):
     """
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=60):
+                 timeout=60,scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         """
-
-        self._other_actor_target_velocity = 3
         self._wmap = CarlaDataProvider.get_map()
         self._reference_waypoint = self._wmap.get_waypoint(config.trigger_points[0].location)
         self._trigger_location = config.trigger_points[0].location
         self._other_actor_transform = None
-        self._num_lane_changes = 0
-        # Timeout of scenario in seconds
         self.timeout = timeout
-        # Total Number of attempts to relocate a vehicle before spawning
-        self._number_of_attempts = 100
-        # Number of attempts made so far
         self._spawn_attempted = 0
         self.sidewalk_flag = False
         self.accum_distance = 0
         route_id = int(config.ego_vehicle.name.split("_")[1])
         self._ego_route = CarlaDataProvider.get_ego_vehicle_route()[route_id]
+
+        if scenario_parameter is None:
+            self._other_actor_target_velocity = 3
+            self._num_lane_changes = 0
+            self._pass_distance = 30
+            # Total Number of attempts to relocate a vehicle before spawning
+            self._number_of_attempts = 100
+        else:
+            # NOTE(GJH): Use scenario_parameter to assign.
+            self._other_actor_target_velocity = scenario_parameter["other_actor_target_velocity"]
+            self._other_actor_transform = None
+            self._num_lane_changes = 0
+            self._pass_distance = scenario_parameter["pass_distance"]
+            # Timeout of scenario in seconds
+            self.timeout = timeout
+            # Total Number of attempts to relocate a vehicle before spawning
+            self._number_of_attempts = scenario_parameter["number_of_attempts"]
+            # Number of attempts made so far
 
         super(VehicleTurningRight, self).__init__("VehicleTurningRight",
                                                   ego_vehicles,
@@ -318,7 +332,7 @@ class VehicleTurningRight(BasicScenario):
         if not self.sidewalk_flag:
             dist_to_travel = lane_width + (1.10 * lane_width * self._num_lane_changes)
         else:
-            dist_to_travel = 4 * lane_width + 30 + (1.10 * lane_width * self._num_lane_changes) + self.accum_distance
+            dist_to_travel = 4 * lane_width + self._pass_distance + (1.10 * lane_width * self._num_lane_changes) + self.accum_distance
 
         # print(dist_to_travel)
         if not self.sidewalk_flag:
@@ -394,7 +408,7 @@ class VehicleTurningRight(BasicScenario):
         """
         self.remove_all_actors()
 
-
+@ScenarioClassRegistry.register
 class VehicleTurningLeft(BasicScenario):
 
     """
@@ -407,26 +421,29 @@ class VehicleTurningLeft(BasicScenario):
     """
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=60):
+                 timeout=60, scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         """
-
-        self._other_actor_target_velocity = 10
         self._wmap = CarlaDataProvider.get_map()
         self._reference_waypoint = self._wmap.get_waypoint(config.trigger_points[0].location)
         self._trigger_location = config.trigger_points[0].location
         self._other_actor_transform = None
         self._num_lane_changes = 0
-        # Timeout of scenario in seconds
-        self.timeout = timeout
-        # Total Number of attempts to relocate a vehicle before spawning
-        self._number_of_attempts = 100
-        # Number of attempts made so far
         self._spawn_attempted = 0
-
+        self.timeout = timeout
         route_id = int(config.ego_vehicle.name.split("_")[1])
         self._ego_route = CarlaDataProvider.get_ego_vehicle_route()[route_id]
+
+        if scenario_parameter is None: 
+            self._other_actor_target_velocity = 10
+            # Total Number of attempts to relocate a vehicle before spawning
+            self._number_of_attempts = 100
+        else:
+            # NOTE(GJH): Use scenario_parameter to assign.
+            self._other_actor_target_velocity = scenario_parameter["other_actor_target_velocity"]
+            # Total Number of attempts to relocate a vehicle before spawning
+            self._number_of_attempts = scenario_parameter["number_of_attempts"]
 
         super(VehicleTurningLeft, self).__init__("VehicleTurningLeft",
                                                  ego_vehicles,
@@ -562,7 +579,7 @@ class VehicleTurningLeft(BasicScenario):
         """
         self.remove_all_actors()
 
-
+@ScenarioClassRegistry.register
 class VehicleTurningRoute(BasicScenario):
 
     """
@@ -576,12 +593,11 @@ class VehicleTurningRoute(BasicScenario):
     """
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=60):
+                 timeout=60, scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         """
 
-        self._other_actor_target_velocity = 10
         self._wmap = CarlaDataProvider.get_map()
         self._reference_waypoint = self._wmap.get_waypoint(config.trigger_points[0].location)
         self._trigger_location = config.trigger_points[0].location
@@ -589,14 +605,21 @@ class VehicleTurningRoute(BasicScenario):
         self._num_lane_changes = 0
         # Timeout of scenario in seconds
         self.timeout = timeout
-        # Total Number of attempts to relocate a vehicle before spawning
-        self._number_of_attempts = 100
         # Number of attempts made so far
         self._spawn_attempted = 0
         self.sidewalk_flag = False
         self.accum_distance = 0
         route_id = int(config.ego_vehicle.name.split("_")[1])
         self._ego_route = CarlaDataProvider.get_ego_vehicle_route()[route_id]
+        if scenario_parameter is None:
+            self._other_actor_target_velocity = 10
+            self._number_of_attempts = 100
+            self._pass_distance = 30
+        else:
+            # NOTE(GJH): Use scenario_parameter to assign.
+            self._other_actor_target_velocity = scenario_parameter["other_actor_target_velocity"]
+            self._number_of_attempts = scenario_parameter["number_of_attempts"]
+            self._pass_distance = scenario_parameter["pass_distance"]
 
         super(VehicleTurningRoute, self).__init__("VehicleTurningRoute",
                                                   ego_vehicles,
@@ -748,7 +771,7 @@ class VehicleTurningRoute(BasicScenario):
         if not self.sidewalk_flag:
             dist_to_travel = lane_width + (1.10 * lane_width * self._num_lane_changes)
         else:
-            dist_to_travel = 4 * lane_width + 30 + (1.10 * lane_width * self._num_lane_changes) + self.accum_distance
+            dist_to_travel = 4 * lane_width + self._pass_distance + (1.10 * lane_width * self._num_lane_changes) + self.accum_distance
 
         if self.sidewalk_flag:
             trigger_distance = InTriggerDistanceToVehicle_Away(self.other_actors[0],

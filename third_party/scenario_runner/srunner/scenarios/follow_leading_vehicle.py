@@ -52,25 +52,30 @@ class FollowLeadingVehicle(BasicScenario):
     timeout = 120            # Timeout of scenario in seconds
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=60):
+                 timeout=60, scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
 
         If randomize is True, the scenario parameters are randomized
         """
-
         self._map = CarlaDataProvider.get_map()
-        self._first_vehicle_location = 25
-        self._first_vehicle_speed = 10
         self._reference_waypoint = self._map.get_waypoint(config.trigger_points[0].location)
-        self._other_actor_max_brake = 1.0
-        self._other_actor_stop_in_front_intersection = 20
-        self._other_actor_transform = None
-        # Timeout of scenario in seconds
         self.timeout = timeout
-        # TODO(GJH): Add _trigger_distance as a parameter
-        # self._trigger_distance = config["_trigger_distance"]
-        self._trigger_distance = 20
+        self._other_actor_transform = None
+        if scenario_parameter is None:
+            self._first_vehicle_location = 25
+            self._first_vehicle_speed = 10
+            self._other_actor_max_brake = 1.0
+            self._other_actor_stop_in_front_intersection = 20
+            self._trigger_distance = 20
+        else:
+            # NOTE(GJH): Use scenario_parameter to assign
+            self._first_vehicle_location = scenario_parameter["_first_vehicle_location"]
+            self._first_vehicle_speed = scenario_parameter["_first_vehicle_speed"]
+            self._other_actor_max_brake = scenario_parameter["_other_actor_max_brake"]
+            self._other_actor_stop_in_front_intersection = scenario_parameter["_other_actor_stop_in_front_intersection"]
+            self._trigger_distance = scenario_parameter["_trigger_distance"]
+
         super(FollowLeadingVehicle, self).__init__("FollowVehicle",
                                                    ego_vehicles,
                                                    config,
@@ -187,19 +192,28 @@ class FollowLeadingVehicleWithObstacle(BasicScenario):
 
     timeout = 120            # Timeout of scenario in seconds
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True):
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True, scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         """
         self._map = CarlaDataProvider.get_map()
-        self._first_actor_location = 25
-        self._second_actor_location = self._first_actor_location + 41
-        self._first_actor_speed = 10
-        self._second_actor_speed = 1.5
         self._reference_waypoint = self._map.get_waypoint(config.trigger_points[0].location)
-        self._other_actor_max_brake = 1.0
         self._first_actor_transform = None
         self._second_actor_transform = None
+
+        if scenario_parameter is None:
+            self._first_actor_location = 25
+            self._second_actor_location = self._first_actor_location + 41
+            self._first_actor_speed = 10
+            self._second_actor_speed = 1.5
+            self._other_actor_max_brake = 1.0
+        else:
+            # NOTE(GJH): Use scenario_parameter to assign.(Default parameters of the scenario actor are not assigned.)
+            self._first_actor_location = scenario_parameter["first_actor_location"]
+            self._second_actor_location = scenario_parameter["second_actor_location"]
+            self._first_actor_speed = scenario_parameter["first_actor_speed"]
+            self._second_actor_speed = scenario_parameter["second_actor_speed"]
+            self._other_actor_max_brake = scenario_parameter["other_actor_max_brake"]
 
         super(FollowLeadingVehicleWithObstacle, self).__init__("FollowLeadingVehicleWithObstacle",
                                                                ego_vehicles,

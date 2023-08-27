@@ -42,24 +42,34 @@ class OtherLeadingVehicle(BasicScenario):
     """
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=80):
+                 timeout=80, scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         """
         self._world = world
         self._map = CarlaDataProvider.get_map()
-        self._first_vehicle_location = 35
-        self._second_vehicle_location = self._first_vehicle_location + 1
-        self._ego_vehicle_drive_distance = self._first_vehicle_location * 4
-        self._first_vehicle_speed = 55
-        self._second_vehicle_speed = 45
-        self._reference_waypoint = self._map.get_waypoint(config.trigger_points[0].location)
-        self._other_actor_max_brake = 1.0
         self._first_actor_transform = None
         self._second_actor_transform = None
         # Timeout of scenario in seconds
         self.timeout = timeout
-
+        self._reference_waypoint = self._map.get_waypoint(config.trigger_points[0].location)
+        
+        if scenario_parameter is None:
+            self._first_vehicle_location = 35
+            self._second_vehicle_location = self._first_vehicle_location + 1
+            self._ego_vehicle_drive_distance = self._first_vehicle_location * 4
+            self._first_vehicle_speed = 55
+            self._second_vehicle_speed = 45
+            self._other_actor_max_brake = 1.0
+        else:
+            # NOTE(GJH): Use scenario_parameter to assign.
+            self._first_vehicle_location = scenario_parameter['first_vehicle_location']
+            self._second_vehicle_location = scenario_parameter['second_vehicle_location']
+            self._ego_vehicle_drive_distance = scenario_parameter['ego_vehicle_drive_distance']
+            self._first_vehicle_speed = scenario_parameter['first_vehicle_speed']
+            self._second_vehicle_speed = scenario_parameter['second_vehicle_speed']
+            self._other_actor_max_brake = scenario_parameter['other_actor_max_brake']
+            
         super(OtherLeadingVehicle, self).__init__("VehicleDeceleratingInMultiLaneSetUp",
                                                   ego_vehicles,
                                                   config,

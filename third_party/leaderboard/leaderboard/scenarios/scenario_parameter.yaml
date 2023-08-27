@@ -44,7 +44,7 @@ Scenario3:
         propotion: 1.0 # Proportion of the scenario in Scenario3
         trigger_distance: 10 # Distance between the trigger point and the dynamic object
         _ego_vehicle_distance_driven: 40 # Distance the ego vehicle should drive before the scenario ends
-        _other_actor_target_velocity: 3 # Target velocity of the other actor
+        _other_actor_target_velocity: 3 # Target velocity of the other actor. (if velocity < 0, velocity = 3 + (0.4 * self._num_lane_changes))
         _other_actor_max_brake: 1.0 # Max brake speed of the other actor
         _time_to_reach: 10 # Time to reach the dynamic object(one lane each)
         _adversary_type: False # # flag to select either pedestrian (False) or cyclist (True)
@@ -56,27 +56,80 @@ Scenario4:
     VehicleTurningRight:
         propotion: 0.0 # Proportion of the scenario in Scenario4
         _other_actor_target_velocity: 3 # Target velocity of the other actor
-        _number_of_attempts: 500 # Number of attempts to find a valid scenario
+        _pass_distance: 30 # Distance the other actor should pass.
+        _number_of_attempts: 100 # Number of attempts to find a valid scenario
     VehicleTurningLeft:
         propotion: 0.0 # Proportion of the scenario in Scenario4
-
+        _other_actor_target_velocity: 10 # Target velocity of the other actor
+        _number_of_attempts: 100 # Number of attempts to find a valid scenario
     VehicleTurningRoute:
         propotion: 0.0 # Proportion of the scenario in Scenario4
+        _other_actor_target_velocity: 10 # Target velocity of the other actor
+        _pass_distance: 30 # Distance the other actor should pass.
+        _number_of_attempts: 100 # Number of attempts to find a valid scenario
       
-# "Scenario5": 
-#     OtherLeadingVehicle
+Scenario5: 
+    OtherLeadingVehicle:
+        propotion: 1.0 # Proportion of the scenario in Scenario5
+        _first_vehicle_location: 35 # Location of the first vehicle
+        _second_vehicle_location: 36 # Location of the second vehicle(default = _first_vehicle_location + 1)
+        _ego_vehicle_drive_distance: 140 # Distance the ego vehicle should drive before the scenario ends(default = _first_vehicle_location * 4)
+        _first_vehicle_speed: 55 # Speed of the first vehicle
+        _second_vehicle_speed: 45 # Speed of the second vehicle
+        _other_actor_max_brake: 1.0 # Max brake speed of the other actor
 
-# "Scenario6": 
-#     ManeuverOppositeDirection
+Scenario6: 
+    ManeuverOppositeDirection:
+        propotion: 1.0 # Proportion of the scenario in Scenario6
+        _first_vehicle_location: 8 # Location of the first vehicle
+        _second_vehicle_location: 16 # Location of the second vehicle(default = _first_vehicle_location + 8)
+        _ego_vehicle_drive_distance: 32 # Distance the ego vehicle should drive before the scenario ends(default = _second_vehicle_location * 2)
+        _start_distance: 7.2 # Set but not used in this scenario.(_first_vehicle_location * 0.9)
+        _opposite_speed: 5.56 # Speed of the opposite vehicle
+        _source_gap: 40 # Min available free distance between other actors and the spawn location
+Scenario7: 
+    SignalJunctionCrossingRoute:
+        propotion: 1.0 # Proportion of the scenario in Scenario7
+        _ego_max_velocity_allowed: 20 # Maximum allowed velocity [m/s]
+        _ego_expected_driven_distance: 50 # Expected driven distance [m]
+        _ego_distance_to_drive: 20 # Allowed distance to drive
+    NoSignalJunctionCrossingRoute:
+        propotion: 0.0 # Proportion of the scenario in Scenario7
+        _ego_max_velocity_allowed: 20 # Maximum allowed velocity [m/s]
+        _ego_expected_driven_distance: 50 # Expected driven distance [m]
+        _ego_distance_to_drive: 20 # Allowed distance to drive
+Scenario8: 
+    SignalJunctionCrossingRoute:
+        propotion: 1.0 # Proportion of the scenario in Scenario7
+        _ego_max_velocity_allowed: 20 # Maximum allowed velocity [m/s]
+        _ego_expected_driven_distance: 50 # Expected driven distance [m]
+        _ego_distance_to_drive: 20 # Allowed distance to drive
+    NoSignalJunctionCrossingRoute:
+        propotion: 0.0 # Proportion of the scenario in Scenario7
+        _ego_max_velocity_allowed: 20 # Maximum allowed velocity [m/s]
+        _ego_expected_driven_distance: 50 # Expected driven distance [m]
+        _ego_distance_to_drive: 20 # Allowed distance to drive
 
-# "Scenario7": 
-#     SignalJunctionCrossingRoute
+Scenario9: 
+    SignalJunctionCrossingRoute:
+        propotion: 1.0 # Proportion of the scenario in Scenario7
+        _ego_max_velocity_allowed: 20 # Maximum allowed velocity [m/s]
+        _ego_expected_driven_distance: 50 # Expected driven distance [m]
+        _ego_distance_to_drive: 20 # Allowed distance to drive
+    NoSignalJunctionCrossingRoute:
+        propotion: 0.0 # Proportion of the scenario in Scenario7
+        _ego_max_velocity_allowed: 20 # Maximum allowed velocity [m/s]
+        _ego_expected_driven_distance: 50 # Expected driven distance [m]
+        _ego_distance_to_drive: 20 # Allowed distance to drive
 
-# "Scenario8": 
-#     SignalJunctionCrossingRoute
-
-# "Scenario9": 
-#     SignalJunctionCrossingRoute
-
-# "Scenario10": 
-#     NoSignalJunctionCrossingRoute
+Scenario10: 
+    SignalJunctionCrossingRoute:
+        propotion: 0.0 # Proportion of the scenario in Scenario7
+        _ego_max_velocity_allowed: 20 # Maximum allowed velocity [m/s]
+        _ego_expected_driven_distance: 50 # Expected driven distance [m]
+        _ego_distance_to_drive: 20 # Allowed distance to drive
+    NoSignalJunctionCrossingRoute:
+        propotion: 1.0 # Proportion of the scenario in Scenario7
+        _ego_max_velocity_allowed: 20 # Maximum allowed velocity [m/s]
+        _ego_expected_driven_distance: 50 # Expected driven distance [m]
+        _ego_distance_to_drive: 20 # Allowed distance to drive

@@ -44,19 +44,13 @@ class ManeuverOppositeDirection(BasicScenario):
     """
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 obstacle_type='barrier', timeout=120):
+                 obstacle_type='barrier', timeout=120, scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         obstacle_type -> flag to select type of leading obstacle. Values: vehicle, barrier
         """
         self._world = world
         self._map = CarlaDataProvider.get_map()
-        self._first_vehicle_location = 8 #  50
-        self._second_vehicle_location = self._first_vehicle_location + 8 # 60
-        self._ego_vehicle_drive_distance = self._second_vehicle_location * 2
-        self._start_distance = self._first_vehicle_location * 0.9
-        self._opposite_speed = 5.56   # m/s
-        self._source_gap = 40   # m
         self._reference_waypoint = self._map.get_waypoint(config.trigger_points[0].location)
         self._source_transform = None
         self._sink_location = None
@@ -68,7 +62,22 @@ class ManeuverOppositeDirection(BasicScenario):
         self._third_actor_transform = None
         # Timeout of scenario in seconds
         self.timeout = timeout
-
+        if scenario_parameter is None:
+            self._first_vehicle_location = 8 #  50
+            self._second_vehicle_location = self._first_vehicle_location + 8 # 60
+            self._ego_vehicle_drive_distance = self._second_vehicle_location * 2
+            self._start_distance = self._first_vehicle_location * 0.9
+            self._opposite_speed = 5.56   # m/s
+            self._source_gap = 40   # m
+        else:
+            # NOTE(GJH): Use scenario_parameter to assign.
+            self._first_vehicle_location = scenario_parameter['_first_vehicle_location']
+            self._second_vehicle_location = scenario_parameter['_second_vehicle_location']
+            self._ego_vehicle_drive_distance = scenario_parameter['_ego_vehicle_drive_distance']
+            self._start_distance = scenario_parameter['_start_distance']
+            self._opposite_speed = scenario_parameter['_opposite_speed']
+            self._source_gap = scenario_parameter['_source_gap']
+            
         super(ManeuverOppositeDirection, self).__init__(
             "ManeuverOppositeDirection",
             ego_vehicles,

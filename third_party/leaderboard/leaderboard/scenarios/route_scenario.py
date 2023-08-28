@@ -18,7 +18,7 @@ import numpy.random as random
 import torch
 import py_trees
 import matplotlib.pyplot as plt
-
+from typing import List
 import carla
 
 from agents.navigation.local_planner import RoadOption
@@ -281,7 +281,7 @@ class RouteScenario(BasicScenario):
     def get_sensor_tf(self) -> list:
         return self.sensor_tf_list
 
-    def _cal_multi_routes(self, world: carla.libcarla.World, config) -> list:
+    def _cal_multi_routes(self, world: carla.libcarla.World, config) -> List:
         """
         Given the waypoints of one route as anchors, computes waypoints that those ego vehicles will pass by around those anchors.
         Args:

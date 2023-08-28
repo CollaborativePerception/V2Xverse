@@ -93,8 +93,26 @@ def get_camera_extrinsic(cur_extrin, ref_extrin):
 
 
 class BaseAgent(autonomous_agent.AutonomousAgent):
-    def setup(self, path_to_conf_file, ego_vehicles_num):
+    """
+    AutonomousAgent -> BaseAgent
+    This class mainly define:
+        the format and path for the data to be saved during data collection
+        sensor parameters
+        sensor data pre-process before saving
+    Args:
+        self.config: dict()
+        self.step: int, simulation step
+        self._rgb_sensor_data: dict(), rgb data parameters
+        self.weather_id: int, weather parameters
+        self.save_skip_frames: int (default: 4), simulation_frequency/data_saving_frequency
+        self.change_rsu_frame: int (default: 100), simulation_frequency/changing_rsu_position_frequency
+        self.ego_vehicles_num: int, numbers of communicating vehicles
+
+
+    """
+    def setup(self, path_to_conf_file: str, ego_vehicles_num: int):
         self.track = autonomous_agent.Track.SENSORS
+        # load config file, default type for data collection: yaml
         if path_to_conf_file.endswith("yaml"):
             self.config = yaml.load(open(path_to_conf_file, "r"), Loader=yaml.FullLoader)
         else:
@@ -103,24 +121,21 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
         self.wall_start = time.time()
         self.initialized = False
 
+        # load key params related to sensor data saving
         self._rgb_sensor_data = {"width": 800, "height": 600, "fov": 100}
-        # self._sensor_data = {"width": 400, "height": 300, "fov": 100}
         self._sensor_data = self._rgb_sensor_data.copy()
-
         self._3d_bb_distance = 50
         self.weather_id = self.config.get("weather", None)
         self.waypoint_disturb = self.config.get("waypoint_disturb", 0)
         self.waypoint_disturb_seed = self.config.get("waypoint_disturb_seed", 2021)
-        self.destory_hazard_actors = self.config.get("destory_hazard_actors", True)
         self.save_skip_frames = self.config.get("save_skip_frames", 10)
         self.change_rsu_frame = self.config.get("change_rsu_frame", 100)
         self.use_rsu = self.config.get("use_rsu", True)
-
-
         self.rgb_only = self.config.get("rgb_only", True)
-
-        self.save_path = None
         self.ego_vehicles_num = ego_vehicles_num
+
+        # initialize and create data saving directory
+        self.save_path = None
         if SAVE_PATH is not None:
             now = datetime.datetime.now()
             string = pathlib.Path(os.environ["ROUTES"]).stem + "_"
@@ -140,7 +155,7 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                         (now.month, now.day, now.hour, now.minute, now.second),
                     )
                 )
-            print(string)
+            print('data saving path:',string)
             self.save_path = pathlib.Path(os.environ["SAVE_PATH"]) / string
             self.save_path.mkdir(parents=True, exist_ok=False)
 

@@ -1,4 +1,4 @@
-destory_hazard_actors: true
+destroy_hazard_actors: true
 ego_num: 2
 rgb_only: false
 save_skip_frames: 4
@@ -7,3 +7,5 @@ waypoint_disturb_seed: 2020
 weather: 0
 use_rsu: True
 change_rsu_frame: 100
+target_point_distance: 50
+max_speed: 6.5

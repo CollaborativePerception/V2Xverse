@@ -124,22 +124,37 @@ class Queue:
         return len(self.items)
 
 class AutoPilot(MapAgent):
+    """
+    AutonomousAgent -> BaseAgent -> MapAgent -> AutoPilot
+    Main function:
+        generate expert driving control signal during sensor data collection
+        launch action of data collection
+        destroy hazard actors
+    Args:
+        self.destroy_hazard_actors: bool, whether to manually destroy the background actors who get in the way of ego vehicles
+        self.max_speed: float, max speed during driving, m/s
+        self.slow_speed: float, speed when ego vehicle trigger slow-down mode
+        self.visibility: str, whether to consider occlusion when collecting detection labels
+    """
 
     # for stop signs
     PROXIMITY_THRESHOLD = 30.0  # meters
     SPEED_THRESHOLD = 0.1
     WAYPOINT_STEP = 1.0  # meters
 
-    def setup(self, path_to_conf_file ,ego_vehicles_num, max_speed=6.5):
+    def setup(self, path_to_conf_file ,ego_vehicles_num):
         print('setup autopilot!')
         self.ego_freeze_sign = np.zeros(ego_vehicles_num)
         self.agent_name = 'AutoPilot'
+
+        # setup from base_agent.py: setup()
         super().setup(path_to_conf_file, ego_vehicles_num)
 
+        # load params related to driving control
         self.max_speed = self.config.get("max_speed", 6.5)
-        self.max_speed = max_speed
         self.slow_speed = self.config.get("slow_speed", 4)
         self.visibility = self.config.get("visibility", 'global')
+        self.destroy_hazard_actors = self.config.get("destroy_hazard_actors", True)
 
         # record waypoints and speed
         self.record = {}
@@ -212,7 +227,7 @@ class AutoPilot(MapAgent):
 
         for route_id in range(route_num):
             route_tmp = deque()
-            # np.random.seed(self.waypoint_disturb_seed)  ###
+            np.random.seed(self.waypoint_disturb_seed)
             for pos, command in route[route_id]:
                 if command == RoadOption.LANEFOLLOW or command == RoadOption.STRAIGHT:
                     waypoint = self._map.get_waypoint(carla.Location(pos[1], -pos[0]))
@@ -258,7 +273,7 @@ class AutoPilot(MapAgent):
         pos = self._get_position(tick_data, self.vehicle_num)
         theta = tick_data["compass_{}".format(self.vehicle_num)]
         speed = tick_data["move_state_{}".format(self.vehicle_num)]['speed']
-        lidar = tick_data["lidar_{}".format(self.vehicle_num)] # (25276,4)
+        lidar = tick_data["lidar_{}".format(self.vehicle_num)] # shape: (N,4)
         cur_lidar_pose = carla.Location(x=self.lidar_pose.location.x,
                                             y=self.lidar_pose.location.y,
                                             z=self.lidar_pose.location.z)
@@ -507,8 +522,6 @@ class AutoPilot(MapAgent):
                 box = actor.extent
                 data[_id]["box"] = [box.x, box.y, box.z]
                 data[_id]["tpe"] = TPE[actor_type]
-
-        
         return data
 
     def _should_brake(self, command, view_data):

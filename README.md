@@ -55,6 +55,8 @@ Users can also generate data by running simulation process on carla.
 
 
 ~~~Shell
+# Generate the whole dataset in parallel
+
 # Initialize dataset directory
 python simulation/data_collection/init_dir.py --dataset_dir [your dirctory]
 
@@ -62,8 +64,18 @@ python simulation/data_collection/init_dir.py --dataset_dir [your dirctory]
 cd simulation/data_collection
 python generate_yamls.py
 
-# Generate shells for data collection
-python generate_bashs.py
+# Generate scripts for every routes
+python generate_scripts.py
+
+# Packing the scripts
+python generate_batch_collect.py
+
+# Open Carla server （15 parallel process in total）
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40000 -prefer-nvidia
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40002 -prefer-nvidia
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40004 -prefer-nvidia
+...
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40028 -prefer-nvidia
 
 ~~~
 ### 路径初始化文件的地址

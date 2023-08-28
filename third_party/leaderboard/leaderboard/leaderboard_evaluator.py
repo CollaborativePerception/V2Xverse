@@ -248,7 +248,13 @@ class LeaderboardEvaluator(object):
         settings.synchronous_mode = True
         self.world.apply_settings(settings)
 
+        # initialize traffic lights
         self.world.reset_all_traffic_lights()
+        if args.crazy_level != 0:
+            # Turn off traffic light and freeze
+            print("Turn off all the traffic lights")
+            [tf.set_state(carla.libcarla.TrafficLightState.Off) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"set_state")]
+            [tf.freeze(True) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"freeze")]
 
         CarlaDataProvider.set_client(self.client)
         CarlaDataProvider.set_world(self.world)
@@ -299,6 +305,11 @@ class LeaderboardEvaluator(object):
 
         Depending on what code fails, the simulation will either stop the route and
         continue from the next one, or report a crash and stop.
+
+        Args:
+            args: argparse.Namespace, global config
+            config: srunner.scenarioconfigs.route_scenario_configuration.RouteScenarioConfiguration, config for route scenarios
+
         """
         crash_message = ""
         entry_status = "Started"
@@ -311,15 +322,13 @@ class LeaderboardEvaluator(object):
         for j in range(self.ego_vehicles_num):
             self.statistics_manager[j].set_route(config.name, config.index)
 
-        # Set up the user's agent, and the timer to avoid freezing the simulation
+        # Set up the user's agent, and the timer self._agent_watchdog to avoid freezing the simulation
         try:
             self._agent_watchdog.start()
-            # agent_class_name for example 'AutoPilot', 'CoP3BaselineAgent' .etc
+            # agent_class_name for example 'AutoPilot', 'PnP_Agent' .etc
             agent_class_name = getattr(self.module_agent, 'get_entry_point')()
-            log_dir = None
             self.agent_instance = getattr(self.module_agent, agent_class_name)(args.agent_config, 
-                                                                               self.ego_vehicles_num,
-                                                                               args.max_speed)
+                                                                               self.ego_vehicles_num)
             config.agent = self.agent_instance
             if hasattr(self.agent_instance, "get_save_path"):
                 print("Data Generation Confirmed!")
@@ -333,10 +342,10 @@ class LeaderboardEvaluator(object):
                     log_root_dir = self.agent_instance.get_save_path()
                 except:
                     print('load save path failed')
-
             print('Create agent instance cost {}s'.format(time.time()-st))
 
-            # Log simulation information
+            # Log simulation information(or error), every printed string will be logged in file log.log
+            log_dir = None
             log_dir = os.path.join(log_root_dir,'log')
             self.log_dir = log_dir
             if not os.path.exists(log_dir):
@@ -355,26 +364,20 @@ class LeaderboardEvaluator(object):
             if not self.sensors:
                 self.sensors = self.agent_instance.sensors()
                 track = self.agent_instance.track
-
                 AgentWrapper.validate_sensor_configuration(self.sensors, track, args.track)
-
                 self.sensor_icons = [sensors_to_icons[sensor['type']] for sensor in self.sensors]
-                # 111
                 for j in range(self.ego_vehicles_num):
                     self.statistics_manager[j].save_sensors(self.sensor_icons, args.checkpoint)
-            
             self._agent_watchdog.stop()
-        # the number of the ego cars = ego_num  route = list()
+
         except SensorConfigurationInvalid as e:
             # The sensors are invalid -> set the ejecution to rejected and stop
             print("\n\033[91mThe sensor's configuration used is invalid:")
             print("> {}\033[0m\n".format(e))
             traceback.print_exc()
             traceback.print_exc(file=open(log_file_dir,'a'))
-
             crash_message = "Agent's sensors were invalid"
             entry_status = "Rejected"
-
             # self._register_statistics(config, args.ego_num, args.checkpoint, entry_status, crash_message)
             self._cleanup()
             sys.exit(-1)
@@ -385,39 +388,31 @@ class LeaderboardEvaluator(object):
             print("> {}\033[0m\n".format(e))
             traceback.print_exc()
             traceback.print_exc(file=open(log_file_dir,'a'))
-
             crash_message = "Agent couldn't be set up"
-
             # self._register_statistics(config,  args.ego_num, args.checkpoint, entry_status, crash_message)
             self._cleanup()
             return
 
-        print("\033[1m> Loading the world\033[0m")
-
         # Load the world and the scenario
+        print("\033[1m> Loading the world\033[0m")    
         try:
+            # create world
             st = time.time()
             self._load_and_wait_for_world(args, config.town, config.ego_vehicles)
-            print('Load world cost {}s'.format(time.time()-st))
-            if args.crazy_level != 0:
-                # crazy traffic light
-                print("crazy traffic lights")
-                [tf.set_state(carla.libcarla.TrafficLightState.Off) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"set_state")]
-                [tf.freeze(True) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"freeze")]
             self._prepare_ego_vehicles(config.ego_vehicles, False)
+            print('Load world cost {}s'.format(time.time()-st))
+
+            # create route scenario
             st = time.time()
             scenario = RouteScenario(world=self.world, config=config, debug_mode=args.debug, \
                 ego_vehicles_num=self.ego_vehicles_num, crazy_level=args.crazy_level, crazy_propotion=args.crazy_propotion, log_dir=log_dir, trigger_distance = args.trigger_distance)
             config.trajectory=scenario.get_new_config_trajectory()
-            # TODO: may be incorrect!!!
             if self.ego_vehicles_num != 1 :
                 for j in range(self.ego_vehicles_num):
                     self.statistics_manager[j].set_scenario(scenario.scenario[j])
             else:
                 self.statistics_manager[0].set_scenario(scenario.scenario)
-
             print('Load scenario cost {}s'.format(time.time()-st))
-            st = time.time()
 
             # self.agent_instance._init()
             # self.agent_instance.sensor_interface = SensorInterface()
@@ -427,7 +422,8 @@ class LeaderboardEvaluator(object):
                 for vehicle in scenario.ego_vehicles:
                     vehicle.set_light_state(carla.VehicleLightState(self._vehicle_lights))
 
-            # Load scenario and run it
+            # Load scenario and agent into manager and prepare to run it
+            st = time.time()
             if args.record:
                 self.client.start_recorder("{}/{}_rep{}.log".format(args.record, config.name, config.repetition_index))
             self.manager.load_scenario(scenario, self.agent_instance, config.repetition_index, self.ego_vehicles_num, save_root=config.save_path_root, sensor_tf_list=scenario.get_sensor_tf(), is_crazy=(args.crazy_level != 0))
@@ -506,23 +502,19 @@ class LeaderboardEvaluator(object):
         # if crash_message == "Simulation crashed":
         #     sys.exit(-1)
 
-    def run(self, args):
+    def run(self, args: argparse.Namespace):
         """
         Run the challenge mode
         """
-        # agent_class_name = getattr(self.module_agent, 'get_entry_point')()
-        # self.agent_instance = getattr(self.module_agent, agent_class_name)(args.agent_config)
 
         route_indexer = RouteIndexer(args.routes, args.scenarios, args.repetitions)
 
         if args.resume:
             path_tmp = os.path.join(os.path.dirname(args.checkpoint), "ego_vehicle_{}".format(0), os.path.basename(args.checkpoint))
-            route_indexer.resume(path_tmp) #args.checkpoint
-            # 111
+            route_indexer.resume(path_tmp)
             for i in range(self.ego_vehicles_num):
                 self.statistics_manager[i].resume(args.checkpoint)
         else:
-            # 111
             for i in range(self.ego_vehicles_num):              
                 self.statistics_manager[i].clear_record(args.checkpoint)
             route_indexer.save_state(args.checkpoint)
@@ -530,18 +522,12 @@ class LeaderboardEvaluator(object):
         print("Start Running!")
         while route_indexer.peek():
             try:
-                # setup
+                # setup, load the next route config
                 config = route_indexer.next()
 
                 # run
                 self._load_and_run_scenario(args, config)
 
-                # for obj in gc.get_objects():
-                #     try:
-                #         if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-                #             print(type(obj), obj.size())
-                #     except:
-                #         pass
                 for i in range(args.ego_num):
                     folder_path = os.path.join(os.path.dirname(args.checkpoint), "ego_vehicle_{}".format(i))
                     if not os.path.exists(folder_path):
@@ -554,7 +540,6 @@ class LeaderboardEvaluator(object):
 
         # save global statistics
         print("\033[1m> Registering the global statistics\033[0m")
-        # TODO: save global records for every statistics manager.
         try:
             for i in range(self.ego_vehicles_num):
                 global_stats_record = self.statistics_manager[i].compute_global_statistics(route_indexer.total)
@@ -574,7 +559,7 @@ def main():
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
     parser.add_argument('--host', default='localhost',
                         help='IP of the host server (default: localhost)')
-    parser.add_argument('--port', default='40000', help='TCP port to listen to (default: 2000)')
+    parser.add_argument('--port', default='40010', help='TCP port to listen to (default: 2000)')
     parser.add_argument('--trafficManagerPort', default='4665',
                         help='Port to use for the TrafficManager (default: 8000)')
     parser.add_argument('--trafficManagerSeed', default='1',
@@ -592,23 +577,12 @@ def main():
                         default='/GPFS/data/gjliu/Auto-driving/Cop3/leaderboard/data/evaluation_routes/final/town05_short_r0.xml',
                         help='Name of the route to be executed. Point to the route_xml_file to be executed.')
     parser.add_argument('--scenarios',
-                        default='leaderboard/data/scenarios/town05_all_scenarios.json',
+                        default='third_party/leaderboard/data/scenarios/town05_all_scenarios.json',
                         help='Name of the scenario annotation file to be mixed with the route.')
     parser.add_argument('--repetitions',
                         type=int,
                         default=1,
                         help='Number of repetitions per route.')
-
-    # agent-related options
-    parser.add_argument("-a", "--agent", type=str, default='leaderboard/team_code/v2xverse_agent.py', help="Path to Agent's py file to evaluate") # 'leaderboard/team_code/auto_pilot.py'
-    parser.add_argument("--agent-config", type=str, default='leaderboard/team_code/v2xverse_config.py', help="Path to Agent's configuration file") # 'data_collection/yamls/debug.yaml'
-
-    parser.add_argument("--track", type=str, default='SENSORS', help="Participation track: SENSORS, MAP")
-    parser.add_argument('--resume', type=int, default=0, help='Resume execution from last checkpoint?')
-    parser.add_argument("--checkpoint", type=str,
-                        default='/GPFS/data/gjliu/Auto-driving/Cop3/results/eval/test/results.json',
-                        help="Path to checkpoint used for saving statistics and resuming")
-    parser.add_argument('--ego-num', type=int, default=1, help='The number of ego vehicles')
     # crazy level: 0-5, the probability of ignoring front car.
     # crazy propotion: the probability of a car is crazy 
     parser.add_argument('--crazy-level',type=int,  default=3, help='Level background vehicles driving obey rule')
@@ -616,6 +590,19 @@ def main():
 
     parser.add_argument('--max-speed', type=int, default=10, help='Max speed.')
     parser.add_argument('--trigger-distance', type=int, default=10, help='scenario3 trigger distance.')
+    parser.add_argument('--scenario_config_path', type=str, default='simulation/hypes_yaml/scenario.yaml', help='scenario config file path')
+
+
+    # agent-related options
+    parser.add_argument("-a", "--agent", type=str, default='third_party/leaderboard/team_code/auto_pilot.py', help="Path to Agent's py file to evaluate")
+    parser.add_argument("--agent-config", type=str, default='simulation/hypes_yaml/weather-0.yaml', help="Path to Agent's configuration file")
+
+    parser.add_argument("--track", type=str, default='SENSORS', help="Participation track: SENSORS, MAP")
+    parser.add_argument('--resume', type=int, default=0, help='Resume execution from last checkpoint?')
+    parser.add_argument("--checkpoint", type=str,
+                        default='/GPFS/data/gjliu/Auto-driving/Cop3/results/eval/test/results.json',
+                        help="Path to checkpoint used for saving statistics and resuming")
+    parser.add_argument('--ego-num', type=int, default=1, help='The number of ego vehicles')
 
     arguments = parser.parse_args()
 

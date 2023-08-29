@@ -9,6 +9,7 @@ import shapely
 import math
 from collections import deque
 from itertools import chain
+from typing import List
 
 import numpy as np
 import cv2
@@ -50,17 +51,6 @@ WEATHERS = {
 }
 WEATHERS_IDS = list(WEATHERS)
 
-TPE = {
-    carla.CityObjectLabel.Buildings: "Building", 
-    carla.CityObjectLabel.Vegetation: "Vegetation", 
-    carla.CityObjectLabel.Poles: "Poles",
-    carla.CityObjectLabel.Pedestrians: "Pedestrian",
-    carla.CityObjectLabel.TrafficSigns: "TrafficSign",
-    carla.CityObjectLabel.TrafficLight: "TrafficLight",
-    carla.CityObjectLabel.Static: "Static",
-    carla.CityObjectLabel.Fences: "Fence",
-    carla.CityObjectLabel.Walls: "Wall"
-}
 
 def get_entry_point():
     return "AutoPilot"
@@ -124,35 +114,68 @@ class Queue:
         return len(self.items)
 
 class AutoPilot(MapAgent):
+    """
+    AutonomousAgent -> BaseAgent -> MapAgent -> AutoPilot
+    Main function:
+        generate expert driving control signal during sensor data collection
+        launch action of data collection
+        destroy hazard actors
+    Args:
+        self.destroy_hazard_actors: bool, whether to manually destroy the background actors who get in the way of ego vehicles
+        self.max_speed: float, max speed during driving, m/s
+        self.slow_speed: float, speed when ego vehicle trigger slow-down mode
+        self.visibility: str, whether to consider occlusion when collecting detection labels
+    """
 
     # for stop signs
     PROXIMITY_THRESHOLD = 30.0  # meters
     SPEED_THRESHOLD = 0.1
     WAYPOINT_STEP = 1.0  # meters
 
-    def setup(self, path_to_conf_file ,ego_vehicles_num, max_speed=6.5):
+    def setup(self, path_to_conf_file ,ego_vehicles_num):
+        """
+        executed when agent instance is built
+        """
         print('setup autopilot!')
         self.ego_freeze_sign = np.zeros(ego_vehicles_num)
         self.agent_name = 'AutoPilot'
+
+        # setup from base_agent.py: setup()
         super().setup(path_to_conf_file, ego_vehicles_num)
 
+        # load params related to driving control
         self.max_speed = self.config.get("max_speed", 6.5)
-        self.max_speed = max_speed
         self.slow_speed = self.config.get("slow_speed", 4)
         self.visibility = self.config.get("visibility", 'global')
+        self.destroy_hazard_actors = self.config.get("destroy_hazard_actors", True)
+
+        # load params related to sensor data
+        self.save_skip_frames = self.config.get("save_skip_frames", 10)
+        self.change_rsu_frame = self.config.get("change_rsu_frame", 100)
+        self.use_rsu = self.config.get("use_rsu", True)
+        self.rsu_height = self.config.get("rsu_height", 7.5)
+        self.rsu_lane_side = self.config.get("rsu_lane_side", 'right')
+        self.rsu_distance = self.config.get("rsu_distance", 12)
 
         # record waypoints and speed
         self.record = {}
 
     def _init(self):
+        """
+        executed when simulation start to run step
+        """
+
+        # setup from base_agent.py: _init()
         super()._init()
+
+        # variable used in _detect_and_destroy_hazard_actors()
         self.tt = np.zeros(self.ego_vehicles_num)
         self.dd = np.ones(self.ego_vehicles_num)
-        self.loc_queue = [Queue() for i in range(self.ego_vehicles_num)]
+        self.loc_queue = [Queue() for i in range(self.ego_vehicles_num)] # record history trajectory of ego vehicles
 
+        # initialize PIDcontroller (one for speed and one for turning)
         self._turn_controller = PIDController(K_P=1.25, K_I=0.75, K_D=0.3, n=40)
         self._speed_controller = PIDController(K_P=5.0, K_I=0.5, K_D=1.0, n=40)
-
 
         # for stop signs
         self._target_stop_sign = []  # the stop sign affecting the ego vehicle
@@ -162,9 +185,7 @@ class AutoPilot(MapAgent):
         self._stop_completed.extend([False for _ in range(self.ego_vehicles_num)])
         self._affected_by_stop.extend([False for _ in range(self.ego_vehicles_num)])
 
-        self.control_time = []
-        self.save_data_time = []
-
+        # load traffic lights
         lights_list = self._world.get_actors().filter("*traffic_light*")
         self._map = self._world.get_map()
         self._list_traffic_lights = []
@@ -176,11 +197,12 @@ class AutoPilot(MapAgent):
             self._dict_traffic_lights,
         ) = self._gen_traffic_light_dict(self._list_traffic_lights)
 
+        # intialize weather
         if self.weather_id is not None:
             weather = WEATHERS[WEATHERS_IDS[self.weather_id]]
             self._world.set_weather(weather)
 
-        if self.destory_hazard_actors:
+        if self.destroy_hazard_actors:
             self.hazard_actors_dict = {}
 
         # disturb waypoint
@@ -192,16 +214,19 @@ class AutoPilot(MapAgent):
                 self.endpoint.append(updated_route[i][-1][0])
             self._waypoint_planner.route = updated_route
 
+        # a object to produce comprehensive BEV map 
         self.birdview_producer = BirdViewProducer(
             CarlaDataProvider.get_client(),  # carla.Client
             target_size=PixelDimensions(width=400, height=400),
             pixels_per_meter=4,
             crop_type=BirdViewCropType.FRONT_AND_REAR_AREA,
         )
+        
+        # record ids of ego vehicles
         self._vehicle_id = []
+
         self.save_frame = None
         self.first_generate_rsu = True
-        self.change_rsu_frame = 100
 
     def get_save_path(self):
         return self.save_path
@@ -212,7 +237,7 @@ class AutoPilot(MapAgent):
 
         for route_id in range(route_num):
             route_tmp = deque()
-            # np.random.seed(self.waypoint_disturb_seed)  ###
+            np.random.seed(self.waypoint_disturb_seed)
             for pos, command in route[route_id]:
                 if command == RoadOption.LANEFOLLOW or command == RoadOption.STRAIGHT:
                     waypoint = self._map.get_waypoint(carla.Location(pos[1], -pos[0]))
@@ -258,7 +283,7 @@ class AutoPilot(MapAgent):
         pos = self._get_position(tick_data, self.vehicle_num)
         theta = tick_data["compass_{}".format(self.vehicle_num)]
         speed = tick_data["move_state_{}".format(self.vehicle_num)]['speed']
-        lidar = tick_data["lidar_{}".format(self.vehicle_num)] # (25276,4)
+        lidar = tick_data["lidar_{}".format(self.vehicle_num)] # shape: (N,4)
         cur_lidar_pose = carla.Location(x=self.lidar_pose.location.x,
                                             y=self.lidar_pose.location.y,
                                             z=self.lidar_pose.location.z)
@@ -296,18 +321,24 @@ class AutoPilot(MapAgent):
 
         return steer, throttle, brake, target_speed
 
-    def run_step(self, input_data, timestamp):
+    def run_step(self, input_data, timestamp) -> List:
+        """
+        Execute one step of navigation.
+        Args:
+            input_data: sensor data ()
+        Return: 
+            control_all: control signal for each ego vehicle
+        """
+
+        # only initialize once
         if not self.initialized:
             self._init()
-
-        # record control time and time for data saving
-        c_time = 0
-        s_time = 0
 
         control_all = []
         control_all.extend([[] for _ in range(0,self.ego_vehicles_num)])
         self.step += 1
-        # delete rsu and spawn new ones
+
+        # spawn new rsus and delete the last ones
         if self.use_rsu:
             if self.step % self.change_rsu_frame == 0:
                 if self.first_generate_rsu:
@@ -325,11 +356,11 @@ class AutoPilot(MapAgent):
                                                     id=int((self.step/self.change_rsu_frame+1)*1000+vehicle_num),
                                                     is_None=(vehicle is None)))
                     if vehicle is not None:
-                        spawn_loc = get_rsu_point(vehicle)
+                        spawn_loc = get_rsu_point(vehicle, height=self.rsu_height, lane_side=self.rsu_lane_side, distance=self.rsu_distance)
                         self.rsu[vehicle_num].setup_sensors(parent=None, spawn_point=spawn_loc)
-
+        
+        # produce control signal and save sensor data
         for vehicle_num in range(self.ego_vehicles_num):
-            st = time.time()
             self._vehicle = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num) # current hero
             if self._vehicle is None:
             # if not self._vehicle.is_alive:
@@ -337,6 +368,8 @@ class AutoPilot(MapAgent):
             if self._vehicle not in self._vehicle_id:
                 self._vehicle_id.append(self._vehicle.id)
             self.vehicle_num = vehicle_num
+
+            # produce control signal
             data = self.tick(input_data, vehicle_num)
             gps = self._get_position(data, vehicle_num)
             loc = self._vehicle.get_location()
@@ -352,8 +385,6 @@ class AutoPilot(MapAgent):
             self.is_junction = self._map.get_waypoint(
                 self._vehicle.get_location()
             ).is_junction
-            self.actors_data = self.collect_actor_data()
-            self.env_actors_data = self.collect_env_actor_data()
 
             light = self._find_closest_valid_traffic_light(
                 self._vehicle.get_location(), min_dis=50
@@ -369,15 +400,8 @@ class AutoPilot(MapAgent):
             control.throttle = throttle
             control.brake = float(brake)
 
-            c_time += time.time()-st
-            # print('step:{}, ego:{}, steer:{}, throttle:{}, brake:{}'.format(self.step, vehicle_num,control.steer,control.throttle,control.brake))
-
-            self.birdview = BirdViewProducer.as_rgb(
-                self.birdview_producer.produce(agent_vehicle=self._vehicle )
-            )
-
+            # save sensor data -> base_agent.py: save()
             if self.step % self.save_skip_frames == 0 and self.save_path is not None:
-                st = time.time()
                 if self.step % self.change_rsu_frame != 0 and self.use_rsu:
                     self.rsu[vehicle_num].run_step(frame=self.step // self.save_skip_frames)
                 self.save_frame = self.save(
@@ -391,7 +415,6 @@ class AutoPilot(MapAgent):
                     data,
                     mode='all'
                 )
-                s_time += time.time()-st
             else:
                 self.save_frame = None
                 if self.use_rsu:
@@ -408,108 +431,18 @@ class AutoPilot(MapAgent):
                 #     mode='measurement'
                 # )
 
-            if self.destory_hazard_actors:
+            if self.destroy_hazard_actors:
                 try:
                     self.loc_queue[vehicle_num].enqueue(self._vehicle.get_location())
-                    self._detect_and_destory_hazard_actors(vehicle_num)
+                    self._detect_and_destroy_hazard_actors(vehicle_num)
                 except:
                     print('destroy hazard actors failed')
             control_all[vehicle_num]=control
-
-        self.control_time.append(c_time)
-        if s_time > 0 or len(self.save_data_time) == 0:
-            self.save_data_time.append(s_time)
-        print('frame {}, save time {}s'.format(self.step, sum(self.save_data_time)/len(self.save_data_time)))
 
         return control_all
 
     def get_save_frame(self) -> int:
         return self.save_frame
-
-    def collect_actor_data(self):
-        data = {}
-        vehicles = self._world.get_actors().filter("*vehicle*")
-        for actor in vehicles:
-            loc = actor.get_location()
-            if loc.distance(self._vehicle.get_location()) > 50:
-                continue
-            _id = actor.id
-            data[_id] = {}
-            data[_id]["loc"] = [loc.x, loc.y, loc.z]
-            ori = actor.get_transform().rotation.get_forward_vector()
-            data[_id]["ori"] = [ori.x, ori.y, ori.z]
-            box = actor.bounding_box.extent
-            data[_id]["box"] = [box.x, box.y, box.z]
-            vel = actor.get_velocity()
-            data[_id]["vel"] = [vel.x, vel.y, vel.z]
-            angle = actor.get_transform().rotation
-            data[_id]["angle"] = [angle.roll, angle.yaw, angle.pitch]
-            if actor.type_id=="vehicle.diamondback.century":
-                data[_id]["tpe"] = 3
-            else:
-                data[_id]["tpe"] = 0
-
-        walkers = self._world.get_actors().filter("*walker.*")
-        for actor in walkers:
-            loc = actor.get_location()
-            if loc.distance(self._vehicle.get_location()) > 50:
-                continue
-            _id = actor.id
-            data[_id] = {}
-            data[_id]["loc"] = [loc.x, loc.y, loc.z]
-            ori = actor.get_transform().rotation.get_forward_vector()
-            data[_id]["ori"] = [ori.x, ori.y, ori.z]
-            box = actor.bounding_box.extent
-            data[_id]["box"] = [box.x, box.y, box.z]
-            vel = actor.get_velocity()
-            data[_id]["vel"] = [vel.x, vel.y, vel.z]
-            angle = actor.get_transform().rotation
-            data[_id]["angle"] = [angle.roll, angle.yaw, angle.pitch]
-            data[_id]["tpe"] = 1
-
-        lights = self._world.get_actors().filter("*traffic_light*")
-        for actor in lights:
-            loc = actor.get_location()
-            if loc.distance(self._vehicle.get_location()) > 70:
-                continue
-            _id = actor.id
-            data[_id] = {}
-            data[_id]["loc"] = [loc.x, loc.y, loc.z]
-            ori = actor.get_transform().rotation.get_forward_vector()
-            data[_id]["ori"] = [ori.x, ori.y, ori.z]
-            vel = actor.get_velocity()
-            data[_id]["sta"] = int(actor.state)
-            data[_id]["tpe"] = 2
-
-            trigger = actor.trigger_volume
-            box = trigger.extent
-            loc = trigger.location
-            ori = trigger.rotation.get_forward_vector()
-            data[_id]["taigger_loc"] = [loc.x, loc.y, loc.z]
-            data[_id]["trigger_ori"] = [ori.x, ori.y, ori.z]
-            data[_id]["trigger_box"] = [box.x, box.y, box.z]
-        return data
-    
-    def collect_env_actor_data(self):
-        data = {}
-        _id = 0
-        for actor_type in list(TPE.keys()):
-            actors = CarlaDataProvider.get_world().get_level_bbs(actor_type=actor_type)
-            for actor in actors:
-                loc = actor.location
-                if loc.distance(self._vehicle.get_location()) > 50:
-                    continue
-                _id += 1
-                data[_id] = {}
-                data[_id]["loc"] = [loc.x, loc.y, loc.z]
-                ori = actor.rotation.get_forward_vector()
-                data[_id]["ori"] = [ori.x, ori.y, ori.z]
-                box = actor.extent
-                data[_id]["box"] = [box.x, box.y, box.z]
-                data[_id]["tpe"] = TPE[actor_type]
-
-        
-        return data
 
     def _should_brake(self, command, view_data):
         actors = self._world.get_actors()
@@ -1037,8 +970,12 @@ class AutoPilot(MapAgent):
 
         return res
 
-    def _detect_and_destory_hazard_actors(self, vehicle_num):
-
+    def _detect_and_destroy_hazard_actors(self, vehicle_num):
+        """
+        destroy the actors that block ego vehicles
+        If ego vehicle stay stagnant for seconds, we destroy the actor around that also stay stagnant for seconds
+        If ego vehicle is close enough to the destination but not able to trigger the completion of route, we kill the ego
+        """
         dis_to_target = np.sqrt((self._vehicle.get_location().x - self.endpoint[vehicle_num][1]) **2 + 
                                  (self._vehicle.get_location().y + self.endpoint[vehicle_num][0]) **2    )
         if dis_to_target < 15: # start count

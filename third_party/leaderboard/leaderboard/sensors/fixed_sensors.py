@@ -8,7 +8,7 @@ from leaderboard.envs.sensor_interface import CallBack, OpenDriveMapReader, Spee
 from leaderboard.autoagents.autonomous_agent import Track
 from leaderboard.envs.sensor_interface import SensorInterface
 from srunner.scenariomanager.timer import GameTime
-from srunner.tools.scenario_helper import get_location_in_distance_from_wp
+from srunner.tools.scenario_helper import get_location_in_distance_from_wp, get_location_in_distance_from_wp_left
 from PIL import Image, ImageDraw
 import numpy as np
 from team_code.eval_utils import get_yaw_angle, boxes_to_corners_3d, get_points_in_rotated_box_3d, process_lidar_visibility
@@ -34,11 +34,13 @@ TPE = {
 }
 
 
-def get_rsu_point(vehicle,height=7.5):
+def get_rsu_point(vehicle, height=7.5, lane_side='right', distance=12):
     """
     Args:
         vehicle: (carla.Actor) the vehicle that rsu corresponds to.
         height: (int) the height of the rsu.
+        lane_side: spawn rsu on right/left side of lane
+        distance: (float) the distance from RSU to the car, positive value means rsu is in front of car
     Returns:
         (carla.Loction): The exact suggested spawn loction for the rsu. 
     """
@@ -49,8 +51,17 @@ def get_rsu_point(vehicle,height=7.5):
         spawn_point = vehicle_wp.get_right_lane() 
         vehicle_wp = vehicle_wp.get_right_lane() 
     # spawn_loc = spawn_point.transform.location
+
+    if distance >= 0:
+        direction = 'foward'
+    else:
+        direction = 'backward'
+
     #### adjust the RSU distance.
-    spawn_loc, _ = get_location_in_distance_from_wp(spawn_point, 12, False)
+    if lane_side == 'right':
+        spawn_loc, _ = get_location_in_distance_from_wp(spawn_point, distance, False, direction)
+    else:
+        spawn_loc, _ = get_location_in_distance_from_wp_left(spawn_point, distance, False, direction)
     return carla.Location(
         x=spawn_loc.x,
         y=spawn_loc.y,
@@ -766,20 +777,21 @@ class RoadSideUnit(SensorUnit):
         self._rgb_sensor_data = {"width": 800, "height": 600, "fov": 100}
         self.save_path = save_path
         self.id = id
-        self.save_path_tmp =self.save_path / pathlib.Path("rsu_{}".format(self.id))
-        self.loc_path = self.save_path_tmp / "location.json"
-        # intialize folders for the sensors' data.
-        (self.save_path_tmp / "lidar").mkdir(parents=True, exist_ok=True)
-        (self.save_path_tmp / "lidar_semantic_front").mkdir(parents=True, exist_ok=True)
-        for sensor_type in ["rgb", "depth"]:
-            for pos in ["front", "left", "right", "rear"]:
-                name = sensor_type + "_" + pos
-                (self.save_path_tmp / name).mkdir(parents=True, exist_ok=True)
-        (self.save_path_tmp / "3d_bbs").mkdir(parents=True, exist_ok=True)
-        (self.save_path_tmp / "measurements").mkdir(parents=True, exist_ok=True)
-        (self.save_path_tmp / "actors_data").mkdir(parents=True, exist_ok=True)
-        (self.save_path_tmp / "env_actors_data").mkdir(parents=True, exist_ok=True)
-        (self.save_path_tmp / "bev_visibility").mkdir(parents=True, exist_ok=True)
+        if not self.save_path is None:
+            self.save_path_tmp =self.save_path / pathlib.Path("rsu_{}".format(self.id))
+            self.loc_path = self.save_path_tmp / "location.json"
+            # intialize folders for the sensors' data.
+            (self.save_path_tmp / "lidar").mkdir(parents=True, exist_ok=True)
+            (self.save_path_tmp / "lidar_semantic_front").mkdir(parents=True, exist_ok=True)
+            for sensor_type in ["rgb", "depth"]:
+                for pos in ["front", "left", "right", "rear"]:
+                    name = sensor_type + "_" + pos
+                    (self.save_path_tmp / name).mkdir(parents=True, exist_ok=True)
+            (self.save_path_tmp / "3d_bbs").mkdir(parents=True, exist_ok=True)
+            (self.save_path_tmp / "measurements").mkdir(parents=True, exist_ok=True)
+            (self.save_path_tmp / "actors_data").mkdir(parents=True, exist_ok=True)
+            (self.save_path_tmp / "env_actors_data").mkdir(parents=True, exist_ok=True)
+            (self.save_path_tmp / "bev_visibility").mkdir(parents=True, exist_ok=True)
         self.sensor_interface = SensorInterface()
         self._3d_bb_distance = 85
 
@@ -840,7 +852,7 @@ class RoadSideUnit(SensorUnit):
         """
         tick the data each step and store them in the correct directory.
         """
-        if frame is not None:
+        if frame is not None and self.save_path is not None:
             # read the data from sensor
             input_data = self.sensor_interface.get_data()
             # preprocess the data, and store the data

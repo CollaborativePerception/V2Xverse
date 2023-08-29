@@ -19,6 +19,7 @@ import torch
 import py_trees
 import matplotlib.pyplot as plt
 import numpy as np
+from typing import List
 import carla
 
 from agents.navigation.local_planner import RoadOption
@@ -212,7 +213,22 @@ class RouteScenario(BasicScenario):
     def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1, crazy_level=0,crazy_propotion=0,log_dir=None, scenario_parameter=None,trigger_distance=10):
         """
         Setup all relevant parameters and create scenarios along route
+
+        Args:
+            world: carla.libcarla.World
+            config: srunner.scenarioconfigs.route_scenario_configuration.RouteScenarioConfiguration,
+                    route information(name, town, trajectory, weather)
+            ego_vehicles_num: int, number of communicating vehicles
+            log_dir: str, directory to save log
+            scenario information:
+                {crazy_level,
+                crazy_propotion,
+                trigger_distance
+                }
+
         """
+
+        # load or initialize params
         self.config = config
         self.route = None
         self.sampled_scenarios_definitions = None
@@ -224,25 +240,25 @@ class RouteScenario(BasicScenario):
         self.sensor_tf_num = 0
         self.sensor_tf_list = []
         self.log_dir = log_dir
-        self.trigger_distance = trigger_distance
-        # TODO(gjh)：Define ScenarioConfiguration
+        
         self.scenario_parameter = scenario_parameter
-        self.route_dic = {}
-        self.s6flag = 0
+        self.route_scenario_dic = {}
 
+        # update waypoints and scenarios along the routes
         self._update_route(world, config, debug_mode>0)
 
+        # set traffic sensors
         for j in range(self.sensor_tf_num):
             tf_sensor=TrafficLightSensor(config.save_path_root,j)
             self.sensor_tf_list.append(tf_sensor)
-
         self._init_tf_sensors()
 
+        # spawn ego vehicles
         ego_vehicles = self._update_ego_vehicle(world)
-        # # update ego_num, for some ego may fail to spawn
+        # update ego_num, for some ego may fail to spawn
         # self.ego_vehicles_num = len(ego_vehicles)
 
-        # NOTE(GJH): Add the following code to support scenario_parameter 
+        
         if self.scenario_parameter is not None:
             self.list_scenarios = self._build_scenario_parameter_instances(world,
                                                              ego_vehicles,
@@ -265,9 +281,9 @@ class RouteScenario(BasicScenario):
                                             debug_mode=debug_mode>1,
                                             terminate_on_failure=False,
                                             criteria_enable=criteria_enable)
-        print('route_scenarios:',self.route_dic)
+        print('route_scenarios:',self.route_scenario_dic)
 
-    def _get_multi_tf(self, trajectory, tf_num=1) -> list:
+    def _get_multi_tf(self, trajectory, tf_num=1) -> List:
         """
         calculate the closest tfs and return them
         """
@@ -295,23 +311,51 @@ class RouteScenario(BasicScenario):
         return tf_list
 
     def _init_tf_sensors(self) -> None:
-        # This function is to find the proper tf and set up sensors on it.
+        """
+        This function is to find the proper tf and set up sensors on it.
+        """
         tf_list = self._get_multi_tf(self.get_new_config_trajectory().copy(), 
                                           tf_num=self.sensor_tf_num)
         for j in range(self.sensor_tf_num):
             self.sensor_tf_list[j].setup_sensors(tf_list[j])
         return
 
-    def get_sensor_tf(self) -> list:
+    def get_sensor_tf(self) -> List:
         return self.sensor_tf_list
 
-    def _cal_multi_routes(self, world, config):
+    def _cal_multi_routes(self, world: carla.libcarla.World, config) -> List:
+        """
+        Given the waypoints of one route as anchors, computes waypoints that those ego vehicles will pass by around those anchors.
+        Args:
+            world: Carla world
+            config:
+                config.trajectory: list of carla.libcarla.Location, sparse waypoints list
+        Returns:
+            trajectory: trajectory[i] represents waypoints of the ith ego vehicle, trajectory[i] is list of carla.libcarla.Location
+        
+        Given config.trajectory[A(start point), B, C, ..., L(end point)]
+        ego 0, ego 1, ego 2 will reach B, C, ..., L individually, but start at different location around A, like
+        ////////////////////////////
+        //      |       ||[ego 1]|        //
+        //      |       ||       |        //
+        //      |       ||       |        //
+        //      |       ||       |        //
+        //      |       ||       |        //
+        //      |[ego 3]||[ego 0]|        //
+        //      |       ||       |        //
+        //      |       ||       |        //
+        //      |       ||       |        //
+        //      |       ||[ego 2]|        //
+        //      |       ||       |        //
+            
+
+        """
         trajectory=[]
         distance_gap_straight = 12
         distance_gap_left = 0
         distance_gap_right = 0
         distance_gap_rear = 0
-        route_distance = 1
+
         # trajectory's element is a list of waypoint, a carla.Location object
         trajectory.append(config.trajectory) 
         # initialize trajectory
@@ -347,16 +391,6 @@ class RouteScenario(BasicScenario):
                 if point == 0:
                     # curk+=1
                     for _ in range(curk, len(val)):
-                        # if val[curk]<7.0:
-                        #     # too close, check the next
-                        #     curk = (curk + 1)%len(idx)
-                        # elif val[curk]<10.0:
-                        #     # appropriate point
-                        #     trajectory[k].append(spawn_points[idx[curk]].location)
-                        #     print("ego{} located at closest spawn point".format(k))
-                        #     curk = (curk + 1)%len(idx)
-                        #     break
-                        # else:
                         waypoint_carla = CarlaDataProvider.get_map().get_waypoint(waypoint)
                         location, travel_distance_start = get_location_in_distance_from_wp(waypoint_carla, travel_distance_start, direction='foward')
                         if abs(travel_distance_start_pre - travel_distance_start)<5.0:
@@ -385,13 +419,6 @@ class RouteScenario(BasicScenario):
                                 travel_distance_start_rear_pre = travel_distance_start_rear
                                 travel_distance_start_rear += distance_gap_rear
                                 break                                    
-                            # elif val[curk]<20**2 and min([spawn_points[idx[curk]].location.distance(trajectory[kk-1][0]) for kk in range(1,k+1)]) >6 :
-                            #     while min([spawn_points[idx[curk]].location.distance(trajectory[kk-1][0]) for kk in range(1,k+1)]) <6 and curk<len(idx)-2:
-                            #         curk += 1
-                            #     trajectory[k].append(spawn_points[idx[curk]].location)
-                            #     curk = (curk + 1)%len(idx)
-                            #     print("ego{} located at the closest spawn point".format(k))
-                            #     break
                             elif abs(travel_distance_start_left-travel_distance_start_left_pre)>3.0 \
                                 and (not(waypoint_start_left is None or waypoint_start_left.lane_type == carla.LaneType.Sidewalk\
                                     or waypoint_start_left.lane_type == carla.LaneType.Shoulder)):                         
@@ -417,22 +444,16 @@ class RouteScenario(BasicScenario):
                     if val[curk]>5.0:
                         trajectory[k].append(waypoint)
                     else:
-                        # _route_distance += travel_distance_route
-                        # location, travel_distance_route = get_location_in_distance_from_wp(waypoint_carla, _start_distance)
                         trajectory[k].append(spawn_points[idx[curk]].location)
                         curk = (curk + 1)%len(idx)
-        # route = open("route.txt",'w')
-        # route.write(str(trajectory))
         self.new_config_trajectory=trajectory.copy()
         return trajectory
 
-    def _cal_multi_routes_for_coslam(self, world, config):
+    def _cal_multi_routes_for_parallel_driving(self, world, config):
+        """
+        Make cars drive in parallel from the start
+        """
         trajectory=[]
-        distance_gap_straight = 12
-        distance_gap_left = 0
-        distance_gap_right = 0
-        distance_gap_rear = 0
-        route_distance = 1
         # trajectory's element is a list of waypoint, a carla.Location object
         trajectory.append(config.trajectory) 
         # initialize trajectory
@@ -499,16 +520,12 @@ class RouteScenario(BasicScenario):
         return trajectory
 
     def get_new_config_trajectory(self):
-        # traject = []
-        # for tj in self.route:
-        #     trj = []
-        #     for wp in tj:
-        #         trj.append(wp[0].location)
-        #     traject.append(trj)
-        # return traject
         return self.new_config_trajectory
 
     def draw_route(self):
+        """
+        draw waypoints coordinates from self.route
+        """
         fig = plt.figure(dpi=400)
         colors = ['tab:red','tab:blue','tab:orange', 'tab:purple','tab:green']
         center_x = self.route[0][0][0].location.x
@@ -534,27 +551,30 @@ class RouteScenario(BasicScenario):
         Update the input route, i.e. refine waypoint list, and extract possible scenario locations
 
         Parameters:
-        - world: CARLA world
-        - config: Scenario configuration (RouteConfiguration)
+            world: CARLA world
+            config: Scenario configuration (RouteConfiguration)
+        Main target variable:
+            self.route: trajectory plan to reach for each ego vehicle
+            self.sampled_scenarios_definitions: scenarios will be triggered on each ego vehicle's route
         """
 
-        # Transform the scenario file into a dictionary
+        # Transform the scenario file into a dictionary, defines possible trigger position for each type of scenario 
         world_annotations = RouteParser.parse_annotations_file(config.scenario_file)
 
         # generate trajectory for ego-vehicles
-        # trajectory's element is a list of waypoint, a carla.Location object
+        # trajectory's element is a list of waypoint(carla.Location object)
         trajectory = self._cal_multi_routes(world, config)
         gps_route=[]
         route=[]
         potential_scenarios_definitions=[]
 
         # prepare route's trajectory (interpolate and add the GPS route)
-        for tr in trajectory:
+        for i, tr in enumerate(trajectory):
             # tr is a list of waypoint, each a carla.Location object
             gps, r = interpolate_trajectory(world, tr)
             gps_route.append(gps)
             route.append(r)
-
+            print('load scenarios for ego{}'.format(i))
             potential_scenarios_definition, _ = RouteParser.scan_route_for_scenarios(
                 config.town, r, world_annotations)
             potential_scenarios_definitions.append(potential_scenarios_definition)
@@ -562,6 +582,7 @@ class RouteScenario(BasicScenario):
         # self.route is a list of ego_vehicles' routes
         self.route = route
         if self.log_dir is not None:
+            # plot waypoints coordinates
             self.draw_route()
         CarlaDataProvider.set_ego_vehicle_route([convert_transform_to_location(self.route[j]) for j in range(self.ego_vehicles_num)])
         config.agent.set_global_plan(gps_route, self.route)
@@ -577,7 +598,7 @@ class RouteScenario(BasicScenario):
         if debug_mode:
             [self._draw_waypoints(world, self.route[j], vertical_shift=1.0, persistency=50000.0) for j in range(self.ego_vehicles_num)]
 
-    def _update_ego_vehicle(self, world):
+    def _update_ego_vehicle(self, world) -> List:
         """
         Set/Update the start position of the ego_vehicles
         Returns:
@@ -586,42 +607,22 @@ class RouteScenario(BasicScenario):
         # move ego vehicles to correct position
         ego_vehicles=[]
         for j in range(self.ego_vehicles_num):
-            
-
-            # # spawn_points is a list of carla.Transform
-            # spawn_points=world.get_map().get_spawn_points()
-            # spawn_tensor=torch.tensor([[spawn_point.location.x,
-                        # spawn_point.location.y,
-                        # spawn_point.location.z 
-                        # ] for spawn_point in spawn_points],dtype=float)
-
-            # calculate waypoints via knn
             elevate_transform = self.route[j][0][0]
-            # start_point_tensor=torch.tensor([elevate_transform.location.x,elevate_transform.location.y,elevate_transform.location.z] 
-            #                     ,dtype=float).reshape(1,3).repeat(spawn_tensor.shape[0],1)
-            # dist_tensor=((spawn_tensor-start_point_tensor)**2).sum(dim=1,keepdim=False)
-            # val,idx=dist_tensor.topk(1,largest=False,sorted=False)
-            # elevate_transform.location.x = spawn_points[idx[0]].location.x
-            # elevate_transform.location.y = spawn_points[idx[0]].location.y
-            # elevate_transform.location.z = spawn_points[idx[0]].location.z
+            # ego vehicle will float in the air at a height of 0.5m in the first frame
             elevate_transform.location.z += (0.5)
-            print("ego num:{}".format(j))
+            print("ego id:{}".format(j))
             print("transform:{}".format(elevate_transform))
-
-            # try:
             ego_vehicle = CarlaDataProvider.request_new_actor('vehicle.lincoln.mkz2017',
                                                             elevate_transform,
                                                             rolename='hero_{}'.format(j))
             ego_vehicles.append(ego_vehicle)
+
             # set the spectator location above the first ego vehicle
             if j==0:
                 spectator = CarlaDataProvider.get_world().get_spectator()
                 ego_trans = ego_vehicle.get_transform()
                 spectator.set_transform(carla.Transform(ego_trans.location + carla.Location(z=50),
                                                             carla.Rotation(pitch=-90)))
-            # except Exception as e:
-            #     print(e)
-
         return ego_vehicles
 
     def _estimate_route_timeout(self):
@@ -671,6 +672,11 @@ class RouteScenario(BasicScenario):
     def _scenario_sampling(self, potential_scenarios_definitions, random_seed=0):
         """
         The function used to sample the scenarios that are going to happen for this route.
+        Args:
+            potential_scenarios_definitions: OrderedDict, len(possible_scenarios) is the number of position that is possible to trigger scenarios along this route, 
+                                and possible_scenarios[i] is a list of scenarios that is possible to be triggered at the ith position
+        Returns:
+            sampled_scenarios: list of Dict(), sampled from possible scenarios, sampled_scenarios[i] represents the ith scenario to be triggered along this route
         """
 
         # fix the random seed for reproducibility
@@ -712,13 +718,13 @@ class RouteScenario(BasicScenario):
                     if rgn.random()>0.0:
                         selected_scenario = rgn.choice(list_scenarios)
                     selected_scenario = scenario
-            selected_scenario = rgn.choice(list_scenarios)
-
-            if not selected_scenario['name'] in self.route_dic:
-                self.route_dic[selected_scenario['name']] = 1
+            if selected_scenario == None:
+                selected_scenario = rgn.choice(list_scenarios)
+            # record number of each type of scenario along this route
+            if not selected_scenario['name'] in self.route_scenario_dic:
+                self.route_scenario_dic[selected_scenario['name']] = 1
             else:
-                self.route_dic[selected_scenario['name']] += 1
-
+                self.route_scenario_dic[selected_scenario['name']] += 1
             return selected_scenario
 
         # The idea is to randomly sample a scenario per trigger position.
@@ -730,9 +736,9 @@ class RouteScenario(BasicScenario):
             scenario_choice = select_scenario_randomly(possible_scenarios) # random sampling
             if scenario_choice == None:
                 continue
-            print('load a', scenario_choice['name'])
+            print('load {} at (x={}, y={})'.format(scenario_choice['name'], scenario_choice['trigger_position']['x'], scenario_choice['trigger_position']['y']))
             del possible_scenarios[possible_scenarios.index(scenario_choice)]
-            # We keep sampling and testing if this position is present on any of the scenarios.
+            # Keep sampling and testing if this position is present on any of the scenarios.
             while position_sampled(scenario_choice, sampled_scenarios):
                 if possible_scenarios is None or not possible_scenarios:
                     scenario_choice = None
@@ -746,9 +752,15 @@ class RouteScenario(BasicScenario):
         return sampled_scenarios
 
     def _build_scenario_instances(self, world, ego_vehicles, scenario_definitions,
-                                  scenarios_per_tick=5, timeout=300, debug_mode=False):
+                                  scenarios_per_tick=5, timeout=300, debug_mode=False) -> List:
         """
         Based on the parsed route and possible scenarios, build all the scenario classes.
+        Args:
+            world: Carla world
+            ego_vehicles: list of Carla vehicle
+            scenario_definitions: scenario_definitions[j] represents scenario to be triggered on the jth ego vehicle's route
+        Returns:
+            scenario_instance_vecs: scenario_instance_vecs[j] represents a list of scenario instance to meet with the jth ego vehicle
         """
         scenario_instance_vecs = []
 
@@ -786,32 +798,30 @@ class RouteScenario(BasicScenario):
                                                                             'hero_{}'.format(j))
                 route_var_name = "ScenarioRouteNumber{}".format(scenario_number)
                 scenario_configuration.route_var_name = route_var_name
-                # try:
-                # TODO(GJH):Use scenario_config.yaml to define scenarios
-                if definition['name']=='Scenario3':
-                    scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
-                                                criteria_enable=False, timeout=timeout, trigger_distance=self.trigger_distance)
-                else:
-                    scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
-                                                criteria_enable=False, timeout=timeout)
-                # Do a tick every once in a while to avoid spawning everything at the same time
-                if scenario_number % scenarios_per_tick == 0:
-                    if CarlaDataProvider.is_sync_mode():
-                        world.tick()
+                try:
+                    if definition['name']=='Scenario3':
+                        scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
+                                                    criteria_enable=False, timeout=timeout, trigger_distance=self.trigger_distance)
                     else:
-                        world.wait_for_tick()
-
-                # except Exception as e:
-                #     print("Skipping scenario '{}' due to setup error: {}".format(definition['name'], e))
-                #     continue
+                        scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
+                                                    criteria_enable=False, timeout=timeout)
+                    # Do a tick every once in a while to avoid spawning everything at the same time
+                    if scenario_number % scenarios_per_tick == 0:
+                        if CarlaDataProvider.is_sync_mode():
+                            world.tick()
+                        else:
+                            world.wait_for_tick()
+                except Exception as e:
+                    print("Skipping scenario '{}' due to setup error: {}".format(definition['name'], e))
+                    continue
 
                 scenario_instance_vec.append(scenario_instance)
             scenario_instance_vecs.append(scenario_instance_vec)
 
         return scenario_instance_vecs
 
-    def _build_scenario_parameter_instances(self, world:carla.libcarla.World, ego_vehicles:list, scenario_definitions:list,
-                                  scenarios_per_tick:int=5, timeout:int=300, debug_mode:bool=False, scenario_parameter:dict=None)->list:
+    def _build_scenario_parameter_instances(self, world:carla.libcarla.World, ego_vehicles: List, scenario_definitions: List,
+                                  scenarios_per_tick:int=5, timeout:int=300, debug_mode:bool=False, scenario_parameter:dict=None)-> List:
         """
         Based on the parsed route and possible scenarios, build all the scenario classes.
 
@@ -867,12 +877,7 @@ class RouteScenario(BasicScenario):
                 
                 scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
                                                     criteria_enable=False, timeout=timeout, scenario_parameter=scenario_class_parameter)
-                # if definition['name']=='Scenario3':
-                #     scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
-                #                                 criteria_enable=False, timeout=timeout, trigger_distance=self.trigger_distance)
-                # else:
-                #     scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
-                #                                     criteria_enable=False, timeout=timeout)
+                
                 # Do a tick every once in a while to avoid spawning everything at the same time
                 if scenario_number % scenarios_per_tick == 0:
                     if CarlaDataProvider.is_sync_mode():

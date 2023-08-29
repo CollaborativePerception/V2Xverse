@@ -9,6 +9,7 @@ import re
 import yaml
 import math
 import copy
+from typing import List
 
 def check_numpy_to_torch(x):
     if isinstance(x, np.ndarray):
@@ -165,9 +166,23 @@ def rotate_points_along_z(points, angle):
     points_rot = torch.cat((points_rot, points[:, :, 3:]), dim=-1)
     return points_rot.numpy() if is_numpy else points_rot
 
-def process_lidar_visibility(actors_data, lidar_np, lidar_pose, change_actor_file=False, mode='lidar', thresh=5):
-    original_actors_data = copy.deepcopy(actors_data)
-    
+def process_lidar_visibility(actors_data: dict, lidar_np: np.array, lidar_pose: dict, change_actor_file: bool = False, mode: str = 'lidar', thresh: int = 5) -> (dict, List) : 
+    """
+    tag actors data with label of lidar visibility.
+    If there are enough lidar points within the detection box range of an actor, this actor is visible for lidar, vice versa
+    Args:
+        actors_data: bounding box of actors in world coordinate
+        lidar_np: point clouds in lidar coordinate
+        lidar_pose: lidar pose in world coordinate
+        change_actor_file: whether to rewrite the actor data
+        mode: 'lidar' or 'camera'
+        thresh: minimum number of lidar points to tell a box is visible
+    Returns:
+        actors_data: added with information fo lidar_visibility
+        visible_actor_ids: id of visible actors
+    """
+
+    original_actors_data = copy.deepcopy(actors_data)    
     lidar_unprocessed = copy.deepcopy(lidar_np)
     full_lidar = lidar_unprocessed[..., :3]
     full_lidar[:, 1] *= -1
@@ -175,8 +190,9 @@ def process_lidar_visibility(actors_data, lidar_np, lidar_pose, change_actor_fil
     ego_x = lidar_pose["lidar_pose_x"]
     ego_y = lidar_pose["lidar_pose_y"]
     ego_z = lidar_pose["lidar_pose_z"]
-    ego_theta = lidar_pose["theta"] + np.pi # !note, plus pi in extra.
-    # rotate counterclockwise by ego_theta
+    ego_theta = lidar_pose["theta"] + np.pi
+
+    # transform matrix from lidar to world
     R = np.array(
         [
             [np.cos(ego_theta), -np.sin(ego_theta)],
@@ -184,6 +200,7 @@ def process_lidar_visibility(actors_data, lidar_np, lidar_pose, change_actor_fil
         ]
     )
 
+    # transform actor bounding box from world coordinate to lidar coordinate
     for _id in original_actors_data.keys():
         if original_actors_data[_id]["tpe"] == 2:
             continue  # FIXME donot add traffix light
@@ -191,13 +208,14 @@ def process_lidar_visibility(actors_data, lidar_np, lidar_pose, change_actor_fil
         new_loc = R.T.dot(np.array([raw_loc[0] - ego_x , raw_loc[1] - ego_y]))
         new_loc[1] = -new_loc[1]
         original_actors_data[_id]['loc'][:2] = np.array(new_loc)
-        if original_actors_data[_id]["tpe"] == 1:
-            original_actors_data[_id]['loc'][2] -= original_actors_data[_id]['box'][2]
+        # if original_actors_data[_id]["tpe"] == 1:
+        #     original_actors_data[_id]['loc'][2] -= original_actors_data[_id]['box'][2]
         original_actors_data[_id]['loc'][2] -= (ego_z)
         raw_ori = original_actors_data[_id]['ori'][:2]
         new_ori = R.T.dot(np.array([raw_ori[0], raw_ori[1]]))
         original_actors_data[_id]['ori'][:2] = np.array(new_ori)
     
+
     boxes_corner = [] # pose and orientation of the box,
             # (x, y, z, scale_x, scale_y, scale_z, yaw)
     id_map = {}
@@ -213,10 +231,11 @@ def process_lidar_visibility(actors_data, lidar_np, lidar_pose, change_actor_fil
         count += 1
     boxes_corner = np.array(boxes_corner)   
 
+    # transform boxes to form of corner
     corners = boxes_to_corners_3d(boxes_corner, order='lwh')
 
+    # check the number of lidar points in each box and tag the box
     visible_actor_ids = []
-    # print(lidar_unprocessed[:20])
     for N in range(boxes_corner.shape[0]):
         if actors_data[id_map[N]]['tpe']==2:
             if change_actor_file:
@@ -228,7 +247,6 @@ def process_lidar_visibility(actors_data, lidar_np, lidar_pose, change_actor_fil
         if len(num_lidar_points)> thresh :
             if change_actor_file:
                 actors_data[id_map[N]]['{}_visible'.format(mode)] = 1
-
             visible_actor_ids.append(id_map[N])
         else:
             if change_actor_file:

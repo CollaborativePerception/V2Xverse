@@ -5,7 +5,7 @@ from tqdm import tqdm
 import re
 
 def generate_script(
-    port, tm_port, route, scenario, carla_seed, traffic_seed, config_path
+    port, tm_port, route, scenario_params, scenario, carla_seed, traffic_seed, config_path
 ):
     """
     generate script based on a base_script.sh
@@ -15,6 +15,7 @@ def generate_script(
     lines.append("export PORT=%d\n" % port)
     lines.append("export TM_PORT=%d\n" % tm_port)
     lines.append("export ROUTES=${LEADERBOARD_ROOT}/data/%s\n" % route)
+    lines.append("export SCENARIOS_PARAMETER=${LEADERBOARD_ROOT}/%s\n" % scenario_params)  
     lines.append("export SCENARIOS=${LEADERBOARD_ROOT}/data/%s\n" % scenario)
     lines.append("export CARLA_SEED=%d\n" % carla_seed)
     lines.append("export TRAFFIC_SEED=%d\n" % traffic_seed)
@@ -25,15 +26,20 @@ def generate_script(
         % (config_path.split(".")[0], route.split("/")[2].split(".")[0])
     )
     lines.append("\n")
-    base = open("base_script.sh").readlines()
+    base = open(os.path.join(root_dir, "base_script.sh")).readlines()
 
     for line in lines:
-        base.insert(13, line)
+        base.insert(14, line)
 
     return base
 
 # route: dict, contain every route file path and its corresponding scenario json file
 # route[town_(x)_route_file_path] = town(x)_all_scenario.json
+
+root_dir = "simulation/data_collection"
+script_dir = os.path.join(root_dir, 'scripts')
+batch_script_dir = os.path.join(root_dir, 'batch_run')
+
 routes = {}
 routes_dir = '/GPFS/data/gjliu/Auto-driving/V2Xverse/third_party/leaderboard/data/training_routes/splitted_routes'
 pattern = re.compile('.*town(\d\d)')
@@ -58,11 +64,11 @@ for i in range(14):
     configs.append("weather-%d.yaml" % i)
 
 # reset the file folder bashs/
-if os.path.exists("scripts"):
-    shutil.rmtree("scripts")
-    print("remove succeed")
-if not os.path.exists("scripts"):
-    os.mkdir("scripts")
+# if os.path.exists("scripts"):
+#     shutil.rmtree("scripts")
+#     print("remove succeed")
+if not os.path.exists(script_dir):
+    os.mkdir(script_dir)
     print("create scripts folder")
 
 town_list = ['town01', 'town02', 'town03', 'town04', 'town05', 'town06','town07', 'town10']
@@ -95,9 +101,11 @@ for town in town_list:
 # here only scripts for weather-0 will be generated
 # generate seperate scripts for every single route
 weathers_to_generate = [0]
+scen_params = 'leaderboard/scenarios/scenario_parameter.yaml'
 
 for i, weather in enumerate(weathers_to_generate):
-    os.mkdir("scripts/weather-%d" % weather)
+    if not os.path.exists(os.path.join(script_dir, "weather-%d" % weather)):
+        os.mkdir(os.path.join(script_dir, "weather-%d" % weather))
     for route in routes:
         _, port, tm_port = ip_ports[weather]
         route_id = route.split("/")[2].split(".")[0].split('_')[2]
@@ -106,41 +114,46 @@ for i, weather in enumerate(weathers_to_generate):
         port = town_dict[town_str]['routes'][int(route_id)]['port'] + i*1000
         tm_port = town_dict[town_str]['routes'][int(route_id)]['tm_port'] + i*1000
 
+
         script = generate_script(
             port,
             tm_port,
             route,
+            scen_params,
             routes[route],
             carla_seed,
             traffic_seed,
             configs[weather],
         )
         fw = open(
-            "scripts/weather-%d/%s.sh" % (weather, route.split("/")[2].split(".")[0]), "w"
+            os.path.join(script_dir, "weather-%d/%s.sh" % (weather, route.split("/")[2].split(".")[0])), "w"
         )
         for line in script:
             fw.write(line)
 
+
+
 # create a file generate_v2xverse_all.sh to collect data in parallel
-if os.path.exists("batch_run"):
-    shutil.rmtree("batch_run")
-    print("remove batch_run/ succeed")
-if not os.path.exists("batch_run"):
-    os.mkdir("batch_run")
+# if os.path.exists(batch_script_dir):
+#     shutil.rmtree(batch_script_dir)
+#     print("remove batch_run/ succeed")
+if not os.path.exists(batch_script_dir):
+    os.mkdir(batch_script_dir)
     print("create batch_run/ folder")
 
-fw_all = open("generate_v2xverse_all.sh", "w")
+fw_all = open(os.path.join(root_dir, "generate_v2xverse_all.sh"), "w")
 for _, weather in enumerate(weathers_to_generate):
-    os.mkdir("batch_run/weather-%d" % weather)
+    if not os.path.exists(os.path.join(batch_script_dir, "weather-%d" % weather)):
+        os.mkdir(os.path.join(batch_script_dir, "weather-%d" % weather))
     for town in town_list:
         route_order = 0
         for i, port_len in enumerate(town_dict[town]['port_split']):
-            fw = open("batch_run/weather-%d/town_%s_%s.sh" % (weather,town,i), "w")
+            fw = open(os.path.join(batch_script_dir, "weather-%d/town_%s_%s.sh" % (weather,town,i)), "w")
 
             for _ in range(port_len):
                 route = 'routes_{}_{}'.format(town, route_order)
-                fw.write("bash data_collection/bashs/weather-%d/%s.sh \n" % (weather, route))
+                fw.write("bash simulaiton/data_collection/scripts/weather-%d/%s.sh \n" % (weather, route))
                 route_order += 1
 
-            fw_all.write("bash data_collection/batch_run/weather-%d/town_%s_%s.sh & \n" % (weather,town,i))
+            fw_all.write("bash simulaiton/data_collection/batch_run/weather-%d/town_%s_%s.sh & \n" % (weather,town,i))
 

@@ -75,6 +75,7 @@ class AgentWrapper(object):
 
     """
     Wrapper for autonomous agents required for tracking and checking of used sensors
+    This class defines the params of each type of sensor
     """
 
     allowed_sensors = [
@@ -111,8 +112,10 @@ class AgentWrapper(object):
     def setup_sensors(self, vehicle, vehicle_num = 0, save_root=None, debug_mode=False):
         """
         Create the sensors defined by the user and attach them to the ego-vehicle
-        :param vehicle: ego vehicle
-        :return:
+        Args:
+            vehicle: ego vehicle, Carla Vehicle instance
+            vehicle_num: id of vehicle
+        
         """
         sensor_param={}
         bp_library = CarlaDataProvider.get_world().get_blueprint_library()
@@ -183,8 +186,7 @@ class AgentWrapper(object):
                     bp.set_attribute('lower_fov', str(-30))
                     bp.set_attribute('points_per_second', str(250000))
                     bp.set_attribute('atmosphere_attenuation_rate', str(0.004))
-                    ##### NOTE: changed, 0.45 -> 0.0
-                    bp.set_attribute('dropoff_general_rate', str(0))
+                    bp.set_attribute('dropoff_general_rate', str(0)) ##### NOTE: changed, 0.45 -> 0.0
                     bp.set_attribute('dropoff_intensity_limit', str(0.8))
                     bp.set_attribute('dropoff_zero_intensity', str(0.4))
                     sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
@@ -298,17 +300,6 @@ class AgentWrapper(object):
         if hasattr(self._agent, "get_save_frame"):
             return self._agent.get_save_frame()
         return None
-
-    # def cleanup(self):
-    #     """
-    #     Remove and destroy all sensors
-    #     """
-    #     for i, _ in enumerate(self._sensors_list):
-    #         if self._sensors_list[i] is not None:
-    #             self._sensors_list[i].stop()
-    #             self._sensors_list[i].destroy()
-    #             self._sensors_list[i] = None
-    #     self._sensors_list = []
     
     def del_ego_sensor(self, vehicle_num = 0):
         """

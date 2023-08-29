@@ -112,7 +112,7 @@ class StatisticsManager(object):
 
     def set_scenario(self, scenario):
         """
-        Sets the scenario from which the statistics willb e taken
+        Sets the scenario from which the statistics will be taken
         """
         self._master_scenario = scenario
 

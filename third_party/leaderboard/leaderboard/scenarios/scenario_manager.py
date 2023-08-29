@@ -108,7 +108,13 @@ class ScenarioManager(object):
 
     def load_scenario(self, scenario, agent, rep_number, ego_vehicles_num, save_root=None, sensor_tf_list=None, is_crazy=False):
         """
-        Load a new scenario
+        Load scenario instance and agent instance into manager
+        Args:
+            scenario: RouteScenario, scenario instance
+            agent: agent instance
+            rep_number: number of repetition
+            ego_vehicles_num: number of ego vehicles
+            save_root: root directory to save sensor data
         """
 
         GameTime.restart()
@@ -116,8 +122,6 @@ class ScenarioManager(object):
         self._agent = AgentWrapper(agent)
         self.sensor_tf_list = sensor_tf_list
         self.scenario_class = scenario
-        # print("------------scenario_manager-----------")
-        # print(ego_vehicles_num)
         self.ego_vehicles = scenario.ego_vehicles
         self.other_actors = scenario.other_actors
         self.repetition_number = rep_number
@@ -151,14 +155,13 @@ class ScenarioManager(object):
 
         self._watchdog.start()
         self._running = True
-        # print(CarlaDataProvider.get_hero_actor(hero_id=0).is_alive)
+        
         while self._running:
-            st = time.time()
             timestamp = None
             world = CarlaDataProvider.get_world()
             if world:
                 if self.is_crazy:
-                    # crazy traffic light
+                    # turn off traffic light at every frame to prevent from turning on in accident
                     [tf.set_state(carla.libcarla.TrafficLightState.Off) for tf in world.get_actors().filter("*traffic_light*") if hasattr(tf,"set_state")]
                     [tf.freeze(True) for tf in world.get_actors().filter("*traffic_light*") if hasattr(tf,"freeze")]
                 snapshot = world.get_snapshot()
@@ -166,10 +169,6 @@ class ScenarioManager(object):
                     timestamp = snapshot.timestamp
             if timestamp:
                 self._tick_scenario(timestamp)
-
-            self.time_record.append(time.time()-st)
-            print('total single frame time: {}s, average time {}s'.format(time.time()-st, sum(self.time_record)/len(self.time_record)))
-            print('agent time: {}s, control time {}s, scenario time {}s'.format(sum(self.a_time_record)/len(self.a_time_record), sum(self.c_time_record)/len(self.c_time_record), sum(self.sc_time_record)/len(self.sc_time_record)))
 
     def _tick_scenario(self, timestamp):
         """
@@ -184,12 +183,9 @@ class ScenarioManager(object):
             GameTime.on_carla_tick(timestamp)
             CarlaDataProvider.on_carla_tick()
 
-            # to be done
+            # Agent take action (eg. save data/produce control signal)
             try:
-                st = time.time()
                 ego_action = self._agent()
-                self.a_time_record.append(time.time()-st)
-
 
             # Special exception inside the agent that isn't caused by the agent
             except SensorReceivedNoData as e:
@@ -198,51 +194,34 @@ class ScenarioManager(object):
             except Exception as e:
                 raise AgentError(e)
 
-
+            # destroy ego if it is not alive
             for vehicle_num in range(self.ego_vehicles_num):
-                # print('check', CarlaDataProvider.get_hero_actor(hero_id=vehicle_num))
-                if  CarlaDataProvider.get_hero_actor(hero_id=vehicle_num) and not CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive: # (vehicle_num==0 and CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive) or
-                # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
+                if  CarlaDataProvider.get_hero_actor(hero_id=vehicle_num) and not CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
                     self._agent.del_ego_sensor(vehicle_num)
                     self._agent.cleanup_single(vehicle_num)
                     self._agent.cleanup_rsu(vehicle_num)
                     print("destroy ego : {}".format(vehicle_num))
                     CarlaDataProvider.remove_actor_by_id(CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).id)
 
-
+            # Execute driving control signal
             for vehicle_num in range(self.ego_vehicles_num):
-                # print(self.ego_vehicles_num)
-                # print(vehicle_num)
-                # if self.scenario_tree[vehicle_num].status == py_trees.common.Status.RUNNING \
-                #        or self.scenario_tree[vehicle_num].status == py_trees.common.Status.INVALID:
                 try:
-                    st = time.time()
                     ego = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
-                    if ego and ego.is_alive:
-                    # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
-                        self.ego_vehicles[vehicle_num].apply_control(ego_action[vehicle_num])
-                    self.c_time_record.append(time.time()-st)
+                    if ego:
+                        if ego.is_alive:
+                            self.ego_vehicles[vehicle_num].apply_control(ego_action[vehicle_num])
                 except:
                     pass
 
             # Tick scenario
             for vehicle_num in range(self.ego_vehicles_num):
-                # if self.scenario_tree[vehicle_num].status == py_trees.common.Status.RUNNING \
-                #        or self.scenario_tree[vehicle_num].status == py_trees.common.Status.INVALID:
-                
                 try:
-                    st = time.time()
                     ego = CarlaDataProvider.get_hero_actor(hero_id=vehicle_num)
                     if ego and ego.is_alive:
-                    # print("enter the tree")
-                    # print(CarlaDataProvider.get_hero_actor(hero_id=vehicle_num))
-                    # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
                         self.scenario_tree[vehicle_num].tick_once()
-                    self.sc_time_record.append(time.time()-st)
                 except:
                     pass
 
-            # print("pass tree")
             if self._debug_mode:
                 print("\n")
                 for vehicle_num in range(self.ego_vehicles_num):
@@ -258,55 +237,36 @@ class ScenarioManager(object):
                     except:
                         pass
 
+            # destroy ego if it is not in RUNNING status or not alive
             stop_flag = 0
             for vehicle_num in range(self.ego_vehicles_num):
                 if self.scenario_tree[vehicle_num].status != py_trees.common.Status.RUNNING or not CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
                     stop_flag += 1
-                    # print("---------ego_{}--------".format(vehicle_num))
-                    # print(self.scenario_tree[vehicle_num].status)
-                    # self.scenario_tree[vehicle_num].tick_once()
-                    # if self.first_entry[vehicle_num]:
                     if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num):
-                    # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
                         self._agent.del_ego_sensor(vehicle_num)
                         self._agent.cleanup_single(vehicle_num)
                         self._agent.cleanup_rsu(vehicle_num)
-                        
-                        # for vehicle_num_set_up in range(self.ego_vehicles_num):
-                        #     if vehicle_num == vehicle_num_set_up:
-                        #         continue
-                        #     self._agent.setup_sensors(self.ego_vehicles[vehicle_num_set_up], vehicle_num_set_up, self._debug_mode)
-                        # CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).set_simulate_physics(enabled=False)
-                        # CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).destroy()
                         print("destroy ego {}".format(vehicle_num))
                         CarlaDataProvider.remove_actor_by_id(CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).id)
-                    # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num):
-                    # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
-                        # print("Fail to remove")
-                        # self.first_entry[vehicle_num] = False
                     if stop_flag == self.ego_vehicles_num:
                         self._running = False
 
+            # set spectator
             spectator = CarlaDataProvider.get_world().get_spectator()
-            # if CarlaDataProvider.get_hero_actor(hero_id=0).is_alive:
-            # print("pass spectator")
             if CarlaDataProvider.get_hero_actor(hero_id=0):
-            # if CarlaDataProvider.get_hero_actor(hero_id=0).is_alive:
                 ego_trans = CarlaDataProvider.get_hero_actor(hero_id=0).get_transform()
                 self.prev_ego_trans = ego_trans
             else:
                 for vehicle_num in range(1, self.ego_vehicles_num): 
                     if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num):
-                    # if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
                         ego_trans = self.ego_vehicles[vehicle_num].get_transform()
                         self.prev_ego_trans = ego_trans
                         break
                 # if none of the ego vehicle is alive
                 ego_trans = self.prev_ego_trans
-            
             spectator.set_transform(carla.Transform(ego_trans.location + carla.Location(z=50),
                                                         carla.Rotation(pitch=-90)))
-        # print("pass tick")
+
         if self._running and self.get_running_status():
             CarlaDataProvider.get_world().tick(self._timeout)
 

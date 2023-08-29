@@ -208,6 +208,44 @@ def get_location_in_distance_from_wp(waypoint, distance, stop_at_junction=True, 
 
     return waypoint.transform.location, traveled_distance
 
+def get_location_in_distance_from_wp_left(waypoint, distance, stop_at_junction=True, direction ='foward'):
+    """
+    Obtain a location on the left lane in a given distance from the current actor's location.
+    Note: Search is stopped on first intersection.
+
+    @return obtained location and the traveled distance
+    """
+    traveled_distance = 0
+    while not (waypoint.is_intersection and stop_at_junction) and traveled_distance < distance:
+        if direction=='foward':
+            wp_next = waypoint.next(1.0)
+        else :
+            wp_next = waypoint.previous(1.0)
+        if wp_next:
+            waypoint_new = wp_next[-1]
+            traveled_distance += waypoint_new.transform.location.distance(waypoint.transform.location)
+            waypoint = waypoint_new
+        else:
+            break
+    for i in range(8):
+        wp_next = waypoint.get_left_lane()
+
+        if wp_next is not None:
+            if wp_next.lane_type == carla.LaneType.Driving:
+                vehicle_waypoint  = wp_next
+
+        if wp_next is None:
+            break
+        elif wp_next.lane_type == carla.LaneType.Sidewalk:
+            waypoint = wp_next
+            break
+        elif wp_next.lane_type == carla.LaneType.Driving or wp_next.lane_type == carla.LaneType.Shoulder:  ##
+            waypoint = wp_next   ##
+        else:
+            waypoint = wp_next       
+
+    return waypoint.transform.location, traveled_distance
+
 def get_location_previous_from_wp(waypoint, distance, stop_at_junction=True):
     """
     Obtain a location in a given distance from the current actor's location.

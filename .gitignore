@@ -175,6 +175,13 @@ birdview_v2_cache/
 
 # root
 external_paths/
-# data generation
+
+# simulation
 simulation/data_collection/yamls/
 third_party/birdview_v2_cache/
+simulation/data_collection/scripts/
+simulation/data_collection/batch_run/
+birdview_v2_cache
+
+# visualization
+visualization/results

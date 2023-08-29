@@ -55,30 +55,37 @@ Users can also generate data by running simulation process on carla.
 
 
 ~~~Shell
+# Generate the whole dataset in parallel
+
 # Initialize dataset directory
-python simulation/data_collection/init_dir.py --dataset_dir [your dirctory]
+bash scripts/init_dataset_dir.sh [your dataset directory]
 
 # Generate config files (weather 0-13)
-cd simulation/data_collection
-python generate_yamls.py
+python simulation/data_collection/generate_yamls.py
 
-# Generate shells for data collection
-python generate_bashs.py
+# Generate scripts for every routes
+python simulation/data_collection/generate_scripts.py
 
-~~~
-### 路径初始化文件的地址
-存储在 leaderboard/data/training_routes/cop3_split_routes下
-### 计算消耗
-单route大概2GB显存
-### 单条route数据生成
-先开carla server, 注意调整port和traffic manager port, 
+# Packing the scripts
+python generate_batch_collect.py
 
-~~~
-CUDA_VISIBLE_DEVICES=0 /GPFS/data/gjliu/Auto-driving/Cop3/carla/CarlaUE4.sh(or your carla path) --world-port=40000 -prefer-nvidia
+# Open Carla server （15 parallel process in total）
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40000 -prefer-nvidia
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40002 -prefer-nvidia
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40004 -prefer-nvidia
+...
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40028 -prefer-nvidia
+
+# Execute data generation in parallel
+bash simulation/data_collection/generate_v2xverse_all.sh
 ~~~
 
-运行数据生成
-~~~
+Command to generate data for one single route
+~~~Shell
+# Open one Carla server
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40000 -prefer-nvidia
+
+# Execute data generation for route 0 in town01
 bash simulation/data_collection/routes_town01_0.sh
 ~~~
 
@@ -91,33 +98,6 @@ To train the planner, link the prepared dataset to a specific path under the pro
 ln -s ${YOUR_DATA_LOCATION} ./data
 bash scripts/train_planner.sh
 ```
-
-## data generation
-bash data_collection/weather-0/routes_town01_0.sh
-~~~
-### 批量生成命令
-
-先开carla server，注意调整CUDA device和world-port
-~~~
-CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40000 -prefer-nvidia
-CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40002 -prefer-nvidia
-CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40004 -prefer-nvidia
-...
-CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=40030 -prefer-nvidia
-~~~
-
-根据打开的端口（world-port），生成运行指令
-~~~
-python generate_bashs.py
-~~~
-打包指令
-~~~
-python generate_batch_collect.py
-~~~
-运行数据生成simulation
-~~~
-bash data_collection/generate_cop3_all.sh
-~~~
 
 
 ### Linux进程的处理
@@ -138,72 +118,19 @@ kill -9 PID
 ps -def |grep 'carla' |cut -c 9-15| xargs kill -9
 ~~~
 
+## Close-loop evaluation
 
-## Training
 ```Shell
-cd interfuser
-bash scripts/train.sh
-bash scripts/mao_train.sh
-bash scripts/planner_train.sh
-## early fusion
-FUSE_MODE='early' bash scripts/dev_cop3_train.sh
-
-## inter fusion(where2comm)
-FUSE_MODE='inter' bash scripts/dev_cop3_train.sh
+CUDA_VISIBLE_DEVICES=0 carla/CarlaUE4.sh --world-port=3000 -prefer-nvidia
+bash scripts/eval_pnp.sh
 ```
-分布式训练可能存在未能完全关闭进程的情况，请及时清理
-
-## Evaluation
-
-CUDA_VISIBLE_DEVICES=3 ./CarlaUE4.sh --world-port=3000 -opengl
-
-
-CUDA_VISIBLE_DEVICES=6 ./leaderboard/scripts/eval_cop3_short_cheat.sh
-CUDA_VISIBLE_DEVICES=2 ./leaderboard/scripts/eval_cop3_short_none.sh
-
-
 
 ## Visualization
 ```Shell
-cd visualization
-python check_3d_box_with_lidar.py
-python check_3d_bbs.py
-python check_3d_bbs_early_fusion.py
+
+TODO
 ```
 
-## Git开发
-初始化
-Git global setup
-```Shell
-git config --global user.name your_username
-git config --global user.email your_email
-```
-
-```Shell
-# 克隆远程仓库的 dev 分支到本地，若已完成则跳过这一步
-git clone -b dev http://202.120.39.225:58280/LGJ1zed/CoP3.git
-
-# 切换到本地的dev_loc分支（如果没有则新建一个），每次开发前先获取远程 dev 分支最新代码
-git checkout dev_loc
-git pull origin dev:dev_loc
-
-# 提交代码
-git add . # 注意，这里的 “.” 代表文件名，这里是指添加工作区所有文件到暂存区，请将不想添加的文件写入.gitignore，务必避免添加大型数据文件 
-git commit -m "your message"
-# 提交到远程
-git push origin dev_loc:dev
-
-# 避免重复输入账号密码
-git config --global credential.helper store
-
-# 强制pull覆盖本地
-# 运行 fetch 以将所有 origin/ 引用更新为最新
-git fetch --all
-# 可以备份当前分支
-git branch backup-master
-# 强制拉取origin/master
-git reset --hard origin/master
-```
 
 ## Acknowledgements
 This implementation is based on code from several repositories.

@@ -19,8 +19,6 @@ from skimage.measure import block_reduce
 
 from codriving import CODRIVING_REGISTRY
 
-_logger = logging.getLogger(__name__)
-
 
 # CarlaMVDetDataset_planner
 @CODRIVING_REGISTRY.register
@@ -96,7 +94,7 @@ class CarlaMVDatasetWithGTInput(BaseIODataset):
 				ego_path = os.path.join(route_path, file)
 				for i in range(0, frames-input_frame*self.skip_frames-output_points*self.skip_frames, 1):
 					self.route_frames.append((ego_path, i))
-		_logger.info("Sub route dir nums: %d" % len(self.route_frames))
+		logging.info("Sub route dir nums: %d" % len(self.route_frames))
 
 
 	def __len__(self):

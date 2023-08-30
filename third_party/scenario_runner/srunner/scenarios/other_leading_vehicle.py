@@ -63,12 +63,12 @@ class OtherLeadingVehicle(BasicScenario):
             self._other_actor_max_brake = 1.0
         else:
             # NOTE(GJH): Use scenario_parameter to assign.
-            self._first_vehicle_location = scenario_parameter['first_vehicle_location']
-            self._second_vehicle_location = scenario_parameter['second_vehicle_location']
-            self._ego_vehicle_drive_distance = scenario_parameter['ego_vehicle_drive_distance']
-            self._first_vehicle_speed = scenario_parameter['first_vehicle_speed']
-            self._second_vehicle_speed = scenario_parameter['second_vehicle_speed']
-            self._other_actor_max_brake = scenario_parameter['other_actor_max_brake']
+            self._first_vehicle_location = scenario_parameter["first_vehicle_location"]
+            self._second_vehicle_location = scenario_parameter["second_vehicle_location"]
+            self._ego_vehicle_drive_distance = scenario_parameter["ego_vehicle_drive_distance"]
+            self._first_vehicle_speed = scenario_parameter["first_vehicle_speed"]
+            self._second_vehicle_speed = scenario_parameter["second_vehicle_speed"]
+            self._other_actor_max_brake = scenario_parameter["other_actor_max_brake"]
             
         super(OtherLeadingVehicle, self).__init__("VehicleDeceleratingInMultiLaneSetUp",
                                                   ego_vehicles,

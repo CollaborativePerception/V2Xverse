@@ -70,11 +70,11 @@ class FollowLeadingVehicle(BasicScenario):
             self._trigger_distance = 20
         else:
             # NOTE(GJH): Use scenario_parameter to assign
-            self._first_vehicle_location = scenario_parameter["_first_vehicle_location"]
-            self._first_vehicle_speed = scenario_parameter["_first_vehicle_speed"]
-            self._other_actor_max_brake = scenario_parameter["_other_actor_max_brake"]
-            self._other_actor_stop_in_front_intersection = scenario_parameter["_other_actor_stop_in_front_intersection"]
-            self._trigger_distance = scenario_parameter["_trigger_distance"]
+            self._first_vehicle_location = scenario_parameter["first_vehicle_location"]
+            self._first_vehicle_speed = scenario_parameter["first_vehicle_speed"]
+            self._other_actor_max_brake = scenario_parameter["other_actor_max_brake"]
+            self._other_actor_stop_in_front_intersection = scenario_parameter["other_actor_stop_in_front_intersection"]
+            self._trigger_distance = scenario_parameter["trigger_distance"]
 
         super(FollowLeadingVehicle, self).__init__("FollowVehicle",
                                                    ego_vehicles,

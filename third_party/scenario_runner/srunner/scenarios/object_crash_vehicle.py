@@ -65,12 +65,12 @@ class StationaryObjectCrossing(BasicScenario):
         else:
             # NOTE(GJH): Use scenario_parameter to assign.
             # ego vehicle parameters
-            self._ego_vehicle_distance_driven = scenario_parameter['_ego_vehicle_distance_driven']
+            self._ego_vehicle_distance_driven = scenario_parameter['ego_vehicle_distance_driven']
 
             # other vehicle parameters
-            self._other_actor_target_velocity = scenario_parameter['_other_actor_target_velocity']
+            self._other_actor_target_velocity = scenario_parameter['other_actor_target_velocity']
             # Timeout of scenario in seconds
-            self._start_distance = scenario_parameter['_start_distance']
+            self._start_distance = scenario_parameter['start_distance']
 
         super(StationaryObjectCrossing, self).__init__("Stationaryobjectcrossing",
                                                        ego_vehicles,
@@ -200,19 +200,19 @@ class DynamicObjectCrossing(BasicScenario):
             self._number_of_attempts = 500  # 20
         else:
             # NOTE(GJH): Use scenario_parameter to assign.
-            self.trigger_distance = scenario_parameter['_trigger_distance']
+            self.trigger_distance = scenario_parameter['trigger_distance']
             # ego vehicle parameters
-            self._ego_vehicle_distance_driven = scenario_parameter['_ego_vehicle_distance_driven']
+            self._ego_vehicle_distance_driven = scenario_parameter['ego_vehicle_distance_driven']
             # other vehicle parameters
-            self._other_actor_target_velocity = scenario_parameter['_other_actor_target_velocity']
-            self._other_actor_max_brake = scenario_parameter['_other_actor_max_brake']
-            self._time_to_reach = scenario_parameter['_time_to_reach']
+            self._other_actor_target_velocity = scenario_parameter['other_actor_target_velocity']
+            self._other_actor_max_brake = scenario_parameter['other_actor_max_brake']
+            self._time_to_reach = scenario_parameter['time_to_reach']
             # flag to select either pedestrian (False) or cyclist (True)
-            self._adversary_type = scenario_parameter['_adversary_type']
-            self._walker_yaw = scenario_parameter['_walker_yaw']
-            self._num_lane_changes = scenario_parameter['_num_lane_changes']
+            self._adversary_type = scenario_parameter['adversary_type']
+            self._walker_yaw = scenario_parameter['walker_yaw']
+            self._num_lane_changes = scenario_parameter['num_lane_changes']
             # Total Number of attempts to relocate a vehicle before spawning
-            self._number_of_attempts = scenario_parameter['_number_of_attempts']
+            self._number_of_attempts = scenario_parameter['number_of_attempts']
     
         super(DynamicObjectCrossing, self).__init__("DynamicObjectCrossing",
                                                     ego_vehicles,

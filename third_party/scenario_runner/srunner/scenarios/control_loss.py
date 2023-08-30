@@ -67,19 +67,19 @@ class ControlLoss(BasicScenario):
             self._ego_vehicle_target_velocity = 15
         else:
             # TODO(GJH): Use scenario_parameter to assign
-            self._no_of_jitter = scenario_parameter["_no_of_jitter"]                 # Number of jitter actions performed
-            self._noise_mean = scenario_parameter["_noise_mean"]                    # Mean value of steering noise
-            self._noise_std = scenario_parameter["_noise_std"]                      # Std. deviation of steering noise
-            self._dynamic_mean_for_steer = scenario_parameter["_dynamic_mean_for_steer"]
-            self._dynamic_mean_for_throttle = scenario_parameter["_dynamic_mean_for_throttle"]
-            self._abort_distance_to_intersection = scenario_parameter["_abort_distance_to_intersection"]
-            self._start_distance = scenario_parameter["_start_distance"]
-            self._trigger_dist = scenario_parameter["_trigger_dist"]
-            self._end_distance = scenario_parameter["_end_distance"]
-            self._ego_vehicle_max_steer = scenario_parameter["_ego_vehicle_max_steer"]
-            self._ego_vehicle_max_throttle = scenario_parameter["_ego_vehicle_max_throttle"]
-            self._ego_vehicle_target_velocity = scenario_parameter["_ego_vehicle_target_velocity"]
-            self._distance = scenario_parameter["_distance"]
+            self._no_of_jitter = scenario_parameter["no_of_jitter"]                 # Number of jitter actions performed
+            self._noise_mean = scenario_parameter["noise_mean"]                    # Mean value of steering noise
+            self._noise_std = scenario_parameter["noise_std"]                      # Std. deviation of steering noise
+            self._dynamic_mean_for_steer = scenario_parameter["dynamic_mean_for_steer"]
+            self._dynamic_mean_for_throttle = scenario_parameter["dynamic_mean_for_throttle"]
+            self._abort_distance_to_intersection = scenario_parameter["abort_distance_to_intersection"]
+            self._start_distance = scenario_parameter["start_distance"]
+            self._trigger_dist = scenario_parameter["trigger_dist"]
+            self._end_distance = scenario_parameter["end_distance"]
+            self._ego_vehicle_max_steer = scenario_parameter["ego_vehicle_max_steer"]
+            self._ego_vehicle_max_throttle = scenario_parameter["ego_vehicle_max_throttle"]
+            self._ego_vehicle_target_velocity = scenario_parameter["ego_vehicle_target_velocity"]
+            self._distance = scenario_parameter["distance"]
 
         super(ControlLoss, self).__init__("ControlLoss",
                                           ego_vehicles,

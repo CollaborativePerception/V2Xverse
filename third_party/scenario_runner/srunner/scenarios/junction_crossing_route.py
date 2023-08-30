@@ -55,9 +55,9 @@ class SignalJunctionCrossingRoute(BasicScenario):
             self._ego_distance_to_drive = 20          # Allowed distance to drive
         else:
              # NOTE(GJH): Use scenario_parameter to assign.
-            self._ego_max_velocity_allowed = scenario_parameter["_ego_max_velocity_allowed"]
-            self._ego_expected_driven_distance = scenario_parameter["_ego_expected_driven_distance"]
-            self._ego_distance_to_drive = scenario_parameter["_ego_distance_to_drive"]
+            self._ego_max_velocity_allowed = scenario_parameter["ego_max_velocity_allowed"]
+            self._ego_expected_driven_distance = scenario_parameter["ego_expected_driven_distance"]
+            self._ego_distance_to_drive = scenario_parameter["ego_distance_to_drive"]
 
         super(SignalJunctionCrossingRoute, self).__init__("SignalJunctionCrossingRoute",
                                                           ego_vehicles,
@@ -157,9 +157,9 @@ class NoSignalJunctionCrossingRoute(BasicScenario):
             self._ego_distance_to_drive = 20          # Allowed distance to drive
         else:
              # NOTE(GJH): Use scenario_parameter to assign.
-            self._ego_max_velocity_allowed = scenario_parameter["_ego_max_velocity_allowed"]
-            self._ego_expected_driven_distance = scenario_parameter["_ego_expected_driven_distance"]
-            self._ego_distance_to_drive = scenario_parameter["_ego_distance_to_drive"]
+            self._ego_max_velocity_allowed = scenario_parameter["ego_max_velocity_allowed"]
+            self._ego_expected_driven_distance = scenario_parameter["ego_expected_driven_distance"]
+            self._ego_distance_to_drive = scenario_parameter["ego_distance_to_drive"]
 
         super(NoSignalJunctionCrossingRoute, self).__init__("NoSignalJunctionCrossingRoute",
                                                             ego_vehicles,

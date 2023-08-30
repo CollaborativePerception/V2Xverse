@@ -169,14 +169,14 @@ class VehicleTurningRight(BasicScenario):
             self._number_of_attempts = 100
         else:
             # NOTE(GJH): Use scenario_parameter to assign.
-            self._other_actor_target_velocity = scenario_parameter["_other_actor_target_velocity"]
+            self._other_actor_target_velocity = scenario_parameter["other_actor_target_velocity"]
             self._other_actor_transform = None
             self._num_lane_changes = 0
-            self._pass_distance = scenario_parameter["_pass_distance"]
+            self._pass_distance = scenario_parameter["pass_distance"]
             # Timeout of scenario in seconds
             self.timeout = timeout
             # Total Number of attempts to relocate a vehicle before spawning
-            self._number_of_attempts = scenario_parameter["_number_of_attempts"]
+            self._number_of_attempts = scenario_parameter["number_of_attempts"]
             # Number of attempts made so far
 
         super(VehicleTurningRight, self).__init__("VehicleTurningRight",
@@ -441,9 +441,9 @@ class VehicleTurningLeft(BasicScenario):
             self._number_of_attempts = 100
         else:
             # NOTE(GJH): Use scenario_parameter to assign.
-            self._other_actor_target_velocity = scenario_parameter["_other_actor_target_velocity"]
+            self._other_actor_target_velocity = scenario_parameter["other_actor_target_velocity"]
             # Total Number of attempts to relocate a vehicle before spawning
-            self._number_of_attempts = scenario_parameter["_number_of_attempts"]
+            self._number_of_attempts = scenario_parameter["number_of_attempts"]
 
         super(VehicleTurningLeft, self).__init__("VehicleTurningLeft",
                                                  ego_vehicles,
@@ -617,9 +617,9 @@ class VehicleTurningRoute(BasicScenario):
             self._pass_distance = 30
         else:
             # NOTE(GJH): Use scenario_parameter to assign.
-            self._other_actor_target_velocity = scenario_parameter["_other_actor_target_velocity"]
-            self._number_of_attempts = scenario_parameter["_number_of_attempts"]
-            self._pass_distance = scenario_parameter["_pass_distance"]
+            self._other_actor_target_velocity = scenario_parameter["other_actor_target_velocity"]
+            self._number_of_attempts = scenario_parameter["number_of_attempts"]
+            self._pass_distance = scenario_parameter["pass_distance"]
 
         super(VehicleTurningRoute, self).__init__("VehicleTurningRoute",
                                                   ego_vehicles,

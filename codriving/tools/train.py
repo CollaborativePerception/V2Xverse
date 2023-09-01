@@ -1,3 +1,4 @@
+from typing import Union
 import argparse
 import os
 import logging
@@ -10,6 +11,7 @@ from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
 from common.random import set_random_seeds
 from common.registry import build_object_within_registry_from_config
 from common.io import load_config_from_yaml
+from common.torch_helper import load_checkpoint
 import codriving
 from codriving import CODRIVING_REGISTRY
 from codriving.models.model_decoration import decorate_model
@@ -57,6 +59,12 @@ def parse_args():
         default="./output/",
         type=str,
         help="directory to output model/log/etc.",
+        )
+    parser.add_argument(
+        "--resume",
+        default="",
+        type=str,
+        help="Path of the checkpoint from which the training resumes",
         )
 
     parse_args = parser.parse_args()
@@ -107,17 +115,9 @@ def main():
         CODRIVING_REGISTRY,
         model_config,
     )
-    model.to(DEVICE)
     model_decoration_config = config['model_decoration']
     decorate_model(model, **model_decoration_config)
-
-    if DISTRIBUTED:
-        # Documentation: https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
-        model = nn.parallel.DistributedDataParallel(
-            model,
-            device_ids=[DEVICE],
-            output_device=DEVICE,
-            )
+    model.to(DEVICE)
 
     # loss function
     # TODO (yinda): make sure whether loss function should be wrapped within DDP
@@ -147,7 +147,24 @@ def main():
         optimizer=optimizer,
         )
 
-    for epoch_idx in range(EPOCHS):
+    # resume
+    if len(args.resume) > 0:
+        last_epoch_idx = load_checkpoint(args.resume, DEVICE, model, optimizer, lr_scheduler)
+    else:
+        last_epoch_idx = -1
+    start_epoch_idx = last_epoch_idx + 1
+
+    # model preparation for distributed training
+    if DISTRIBUTED:
+        # Documentation: https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
+        model = nn.parallel.DistributedDataParallel(
+            model,
+            device_ids=[DEVICE],
+            output_device=DEVICE,
+            )
+
+    # main training loop
+    for epoch_idx in range(start_epoch_idx, EPOCHS):
         # trainining
         train_one_epoch(
             args,
@@ -177,6 +194,7 @@ def main():
             epoch_idx,
             model,
             optimizer,
+            lr_scheduler,
         )
 
 
@@ -303,15 +321,18 @@ def save_checkpoint(
     epoch_idx : int,
     model : nn.Module,
     optimizer : torch.optim.Optimizer,
+    lr_scheduler : LRScheduler,
 ):
     """
     Save checkpoint
+    Reference: https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-a-general-checkpoint-for-inference-and-or-resuming-training
 
     Args:
-        args (argparse.Namespace): parsed arguments
-        epoch_idx (int): epoch index
-        model (nn.Module): model to be checkpointed
-        optimizer (torch.optim.Optimizer): optimizer state to be checkpointed
+        args: parsed arguments
+        epoch_idx: epoch index
+        model: model to be checkpointed
+        optimizer: optimizer state to be checkpointed
+        lr_scheduler: learning rate scheduler to be checkpointed
     """
     LOCAL_RANK = int(os.environ.get('LOCAL_RANK', 0))
     if LOCAL_RANK != 0:
@@ -320,8 +341,8 @@ def save_checkpoint(
     checkpoint = dict(
         epoch=epoch_idx,
         model_state_dict=model.state_dict(),
-        optimizer_state_dict=optimizer.state_dict()
-
+        optimizer_state_dict=optimizer.state_dict(),
+        lr_scheduler_state_dict=lr_scheduler.state_dict(),
     )
     save_dir = f'{args.out_dir}/models'
     save_path = f'{save_dir}/epoch_{epoch_idx}.ckpt'

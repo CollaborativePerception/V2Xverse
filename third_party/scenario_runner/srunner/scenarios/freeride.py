@@ -22,7 +22,7 @@ class FreeRide(BasicScenario):
     Implementation of a simple free ride scenario that consits only of the ego vehicle
     """
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,scenario_parameter=None,
                  timeout=10000000):
         """
         Setup all relevant parameters and create scenario

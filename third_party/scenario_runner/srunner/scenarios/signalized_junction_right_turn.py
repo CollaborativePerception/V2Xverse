@@ -30,8 +30,10 @@ from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import (get_geometric_linear_intersection,
                                            get_crossing_point,
                                            generate_target_waypoint)
+from . import ScenarioClassRegistry
 
 
+@ScenarioClassRegistry.register
 class SignalizedJunctionRightTurn(BasicScenario):
 
     """
@@ -42,7 +44,7 @@ class SignalizedJunctionRightTurn(BasicScenario):
     This is a single ego vehicle scenario
     """
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,scenario_parameter=None,
                  timeout=80):
         """
         Setup all relevant parameters and create scenario

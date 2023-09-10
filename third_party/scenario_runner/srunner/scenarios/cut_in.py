@@ -38,7 +38,7 @@ class CutIn(BasicScenario):
 
     timeout = 1200
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,scenario_parameter=None,
                  timeout=600):
 
         self.timeout = timeout

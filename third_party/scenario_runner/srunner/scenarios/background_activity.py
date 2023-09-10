@@ -35,7 +35,7 @@ class BackgroundActivity(BasicScenario):
         'Town10': 120,
     }
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, timeout=35 * 60):
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, scenario_parameter=None,timeout=35 * 60):
         """
         Setup all relevant parameters and create scenario
         """

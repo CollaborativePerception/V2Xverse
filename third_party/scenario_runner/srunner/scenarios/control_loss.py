@@ -24,8 +24,9 @@ from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import (I
                                                                                DriveDistance)
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import get_location_in_distance_from_wp
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class ControlLoss(BasicScenario):
 
     """
@@ -35,26 +36,13 @@ class ControlLoss(BasicScenario):
     """
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=60):
+                 timeout=60,scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         """
-        # ego vehicle parameters
-        self._no_of_jitter = 10
-        self._noise_mean = 0      # Mean value of steering noise
-        self._noise_std = 0.01   # Std. deviation of steering noise
-        self._dynamic_mean_for_steer = 0.001
-        self._dynamic_mean_for_throttle = 0.045
-        self._abort_distance_to_intersection = 10
+        self._map = CarlaDataProvider.get_map()
         self._current_steer_noise = [0]  # This is a list, since lists are mutable
         self._current_throttle_noise = [0]
-        self._start_distance = 20
-        self._trigger_dist = 2
-        self._end_distance = 30
-        self._ego_vehicle_max_steer = 0.0
-        self._ego_vehicle_max_throttle = 1.0
-        self._ego_vehicle_target_velocity = 15
-        self._map = CarlaDataProvider.get_map()
         # Timeout of scenario in seconds
         self.timeout = timeout
         # The reference trigger for the control loss
@@ -62,6 +50,37 @@ class ControlLoss(BasicScenario):
         self.loc_list = []
         self.obj = []
         self._randomize = randomize
+        
+        if scenario_parameter is None:
+            # ego vehicle parameters
+            self._no_of_jitter = 10                 # Number of jitter actions performed
+            self._noise_mean = 0                    # Mean value of steering noise
+            self._noise_std = 0.01                  # Std. deviation of steering noise
+            self._dynamic_mean_for_steer = 0.001
+            self._dynamic_mean_for_throttle = 0.045
+            self._abort_distance_to_intersection = 10
+            self._start_distance = 20
+            self._trigger_dist = 2
+            self._end_distance = 30
+            self._ego_vehicle_max_steer = 0.0
+            self._ego_vehicle_max_throttle = 1.0
+            self._ego_vehicle_target_velocity = 15
+        else:
+            # TODO(GJH): Use scenario_parameter to assign
+            self._no_of_jitter = scenario_parameter["no_of_jitter"]                 # Number of jitter actions performed
+            self._noise_mean = scenario_parameter["noise_mean"]                    # Mean value of steering noise
+            self._noise_std = scenario_parameter["noise_std"]                      # Std. deviation of steering noise
+            self._dynamic_mean_for_steer = scenario_parameter["dynamic_mean_for_steer"]
+            self._dynamic_mean_for_throttle = scenario_parameter["dynamic_mean_for_throttle"]
+            self._abort_distance_to_intersection = scenario_parameter["abort_distance_to_intersection"]
+            self._start_distance = scenario_parameter["start_distance"]
+            self._trigger_dist = scenario_parameter["trigger_dist"]
+            self._end_distance = scenario_parameter["end_distance"]
+            self._ego_vehicle_max_steer = scenario_parameter["ego_vehicle_max_steer"]
+            self._ego_vehicle_max_throttle = scenario_parameter["ego_vehicle_max_throttle"]
+            self._ego_vehicle_target_velocity = scenario_parameter["ego_vehicle_target_velocity"]
+            self._distance = scenario_parameter["distance"]
+
         super(ControlLoss, self).__init__("ControlLoss",
                                           ego_vehicles,
                                           config,
@@ -77,7 +96,9 @@ class ControlLoss(BasicScenario):
             self._distance = random.randint(low=10, high=80, size=3)
             self._distance = sorted(self._distance)
         else:
-            self._distance = [14, 48, 74]
+            # TODO(GJH): Need to be changed to be more general
+            if self._distance is None:
+                self._distance = [14, 48, 74]
         first_loc, _ = get_location_in_distance_from_wp(self._reference_waypoint, self._distance[0])
         second_loc, _ = get_location_in_distance_from_wp(self._reference_waypoint, self._distance[1])
         third_loc, _ = get_location_in_distance_from_wp(self._reference_waypoint, self._distance[2])

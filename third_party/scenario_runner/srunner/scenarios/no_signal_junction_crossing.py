@@ -23,8 +23,10 @@ from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (ActorTrans
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import InTriggerRegion
 from srunner.scenarios.basic_scenario import BasicScenario
+from . import ScenarioClassRegistry
 
 
+@ScenarioClassRegistry.register
 class NoSignalJunctionCrossing(BasicScenario):
 
     """
@@ -43,7 +45,7 @@ class NoSignalJunctionCrossing(BasicScenario):
     _other_actor_max_brake = 1.0
     _other_actor_target_velocity = 15
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,scenario_parameter=None,
                  timeout=60):
         """
         Setup all relevant parameters and create scenario

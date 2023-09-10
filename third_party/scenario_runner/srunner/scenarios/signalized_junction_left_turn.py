@@ -25,8 +25,9 @@ from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTes
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import DriveDistance
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import generate_target_waypoint
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class SignalizedJunctionLeftTurn(BasicScenario):
 
     """
@@ -39,7 +40,7 @@ class SignalizedJunctionLeftTurn(BasicScenario):
 
     timeout = 80  # Timeout of scenario in seconds
 
-    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
+    def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,scenario_parameter=None,
                  timeout=80):
         """
         Setup all relevant parameters and create scenario

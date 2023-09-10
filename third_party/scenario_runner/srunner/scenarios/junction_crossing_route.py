@@ -18,8 +18,9 @@ from srunner.scenariomanager.scenarioatomics.atomic_behaviors import TrafficLigh
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest, DrivenDistanceTest, MaxVelocityTest
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import DriveDistance, WaitEndIntersection
 from srunner.scenarios.basic_scenario import BasicScenario
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class SignalJunctionCrossingRoute(BasicScenario):
 
     """
@@ -27,18 +28,18 @@ class SignalJunctionCrossingRoute(BasicScenario):
     use of the background activity. To ensure interactions with this background
     activity, the traffic lights are modified, setting two of them to green
     """
-
-    # ego vehicle parameters
-    _ego_max_velocity_allowed = 20       # Maximum allowed velocity [m/s]
-    _ego_expected_driven_distance = 50   # Expected driven distance [m]
-    _ego_distance_to_drive = 20          # Allowed distance to drive
+    # NOTE(GJH): Change global to class variables and the original version is wrong -- lack of class variables
+    # # ego vehicle parameters
+    # _ego_max_velocity_allowed = 20       # Maximum allowed velocity [m/s]
+    # _ego_expected_driven_distance = 50   # Expected driven distance [m]
+    # _ego_distance_to_drive = 20          # Allowed distance to drive
 
     _traffic_light = None
 
     # Depending on the route, decide which traffic lights can be modified
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=180):
+                 timeout=180, scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         and instantiate scenario manager
@@ -46,6 +47,17 @@ class SignalJunctionCrossingRoute(BasicScenario):
         # Timeout of scenario in seconds
         self.timeout = timeout
         self.subtype = config.subtype
+
+        # ego vehicle parameters
+        if scenario_parameter is None:
+            self._ego_max_velocity_allowed = 20       # Maximum allowed velocity [m/s]
+            self._ego_expected_driven_distance = 50   # Expected driven distance [m]
+            self._ego_distance_to_drive = 20          # Allowed distance to drive
+        else:
+             # NOTE(GJH): Use scenario_parameter to assign.
+            self._ego_max_velocity_allowed = scenario_parameter["ego_max_velocity_allowed"]
+            self._ego_expected_driven_distance = scenario_parameter["ego_expected_driven_distance"]
+            self._ego_distance_to_drive = scenario_parameter["ego_distance_to_drive"]
 
         super(SignalJunctionCrossingRoute, self).__init__("SignalJunctionCrossingRoute",
                                                           ego_vehicles,
@@ -114,7 +126,7 @@ class SignalJunctionCrossingRoute(BasicScenario):
         self._traffic_light = None
         self.remove_all_actors()
 
-
+@ScenarioClassRegistry.register
 class NoSignalJunctionCrossingRoute(BasicScenario):
 
     """
@@ -123,19 +135,31 @@ class NoSignalJunctionCrossingRoute(BasicScenario):
     until the ego_vehicle has left the intersection.
     """
 
-    # ego vehicle parameters
-    _ego_max_velocity_allowed = 20       # Maximum allowed velocity [m/s]
-    _ego_expected_driven_distance = 50   # Expected driven distance [m]
-    _ego_distance_to_drive = 20          # Allowed distance to drive
+    # NOTE(GJH): Change global to class variables and the original version is wrong -- lack of class variables
+    # # ego vehicle parameters
+    # _ego_max_velocity_allowed = 20       # Maximum allowed velocity [m/s]
+    # _ego_expected_driven_distance = 50   # Expected driven distance [m]
+    # _ego_distance_to_drive = 20          # Allowed distance to drive
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=180):
+                 timeout=180, scenario_parameter=None):
         """
         Setup all relevant parameters and create scenario
         and instantiate scenario manager
         """
         # Timeout of scenario in seconds
         self.timeout = timeout
+
+        # ego vehicle parameters
+        if scenario_parameter is None:
+            self._ego_max_velocity_allowed = 20       # Maximum allowed velocity [m/s]
+            self._ego_expected_driven_distance = 50   # Expected driven distance [m]
+            self._ego_distance_to_drive = 20          # Allowed distance to drive
+        else:
+             # NOTE(GJH): Use scenario_parameter to assign.
+            self._ego_max_velocity_allowed = scenario_parameter["ego_max_velocity_allowed"]
+            self._ego_expected_driven_distance = scenario_parameter["ego_expected_driven_distance"]
+            self._ego_distance_to_drive = scenario_parameter["ego_distance_to_drive"]
 
         super(NoSignalJunctionCrossingRoute, self).__init__("NoSignalJunctionCrossingRoute",
                                                             ego_vehicles,

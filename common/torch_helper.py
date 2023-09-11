@@ -1,5 +1,6 @@
 from typing import Union
 import os
+import logging
 
 import torch
 from torch import nn
@@ -39,6 +40,6 @@ def load_checkpoint(
     epoch_idx = checkpoint['epoch']
 
     LOCAL_RANK = int(os.environ.get('LOCAL_RANK', 0))
-    print(f'Rank {LOCAL_RANK} loaded checkpoint from: {checkpoint_path}')
+    logging.info(f'Rank {LOCAL_RANK} loaded checkpoint from: {checkpoint_path}')
 
     return epoch_idx

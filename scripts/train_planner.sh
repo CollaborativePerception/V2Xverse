@@ -2,7 +2,6 @@
 
 work_dir=out_dir/planner-$(hostname)-$(date +%Y%m%d-%H%M%S)
 mkdir -p ${work_dir}
-log_file=${work_dir}/log.txt
 
 # Set environment variables
 export PYTHONPATH=${PWD}:${PYTHONPATH}
@@ -26,6 +25,5 @@ python -m torch.distributed.run \
     --nnodes=1 \
     --nproc_per_node=4 \
     ${py_script_and_args} \
-    2>&1 | tee ${log_file}
 
 kill $(ps aux | grep train.py | grep -v grep | awk '{print $2}')

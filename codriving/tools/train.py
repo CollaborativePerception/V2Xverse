@@ -17,6 +17,7 @@ from codriving import CODRIVING_REGISTRY
 from codriving.models.model_decoration import decorate_model
 from codriving.utils.torch_helper import \
     move_dict_data_to_device, build_dataloader
+from codriving.utils import initialize_root_logger
 
 
 logger = logging.getLogger("train")
@@ -61,6 +62,12 @@ def parse_args():
         help="directory to output model/log/etc.",
         )
     parser.add_argument(
+        "--log-filename",
+        default="log.txt",
+        type=str,
+        help="log filename",
+        )
+    parser.add_argument(
         "--resume",
         default="",
         type=str,
@@ -76,6 +83,8 @@ def main():
     LOCAL_RANK = int(os.environ.get('LOCAL_RANK', 0))
 
     args = parse_args()
+    initialize_root_logger(path=f'{args.out_dir}/{args.log_filename}')
+
     set_random_seeds(args.seed, LOCAL_RANK)
     config = load_config_from_yaml(args.config_file)
 
@@ -101,7 +110,7 @@ def main():
         RANK = 0
         DEVICE = 0
 
-    print(f'Rank {RANK} using device: {DEVICE}')
+    logging.info(f'Rank {RANK} using device: {DEVICE}')
 
     data_config = config['data']
     train_data_config = data_config['training']
@@ -251,7 +260,7 @@ def train_one_epoch(
             if LOCAL_RANK == 0:
                 # TODO (yinda): add monitoring and logging function here
                 # TODO (yinda): change to a more formal logging
-                print((
+                logging.info((
                     f'Epoch: {epoch_idx}/{max_epoch}, '
                     f'iter.: {batch_idx}/{max_iters_in_current_epoch}, '
                     f'loss: {loss.detach().cpu().numpy()}'
@@ -289,11 +298,9 @@ def validate_one_epoch(
     max_iters_in_current_epoch = len(dataloader)
 
     if LOCAL_RANK == 0:
-        print('Validating...')
+        logging.debug('Validating...')
     with torch.no_grad():
         for batch_idx, batch_data in enumerate(dataloader):
-            # if LOCAL_RANK == 0:
-            #     print(f'{batch_idx}/{max_iters_in_current_epoch}')
             move_dict_data_to_device(batch_data, DEVICE)
             model_output = model(batch_data)
             loss, extra_info = loss_func(batch_data, model_output)
@@ -313,7 +320,7 @@ def validate_one_epoch(
         gathered_losses = [t.to('cpu') for t in gathered_losses]
         mean_loss = torch.stack(gathered_losses).mean()
         mean_loss.detach().cpu().numpy()
-        print(f'Epoch {epoch_idx}/{max_epoch}, mean loss: {mean_loss}')
+        logging.info(f'Epoch {epoch_idx}/{max_epoch}, validation mean loss: {mean_loss}')
 
 
 def save_checkpoint(
@@ -348,7 +355,7 @@ def save_checkpoint(
     save_path = f'{save_dir}/epoch_{epoch_idx}.ckpt'
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     torch.save(checkpoint, save_path)
-    print(f'Save checkpoint to: {save_path}')
+    logging.info(f'Save checkpoint to: {save_path}')
 
 
 if __name__ == "__main__":

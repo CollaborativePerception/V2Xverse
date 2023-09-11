@@ -1,5 +1,6 @@
 from typing import Dict
 from copy import deepcopy
+import logging
 
 
 def _register_generic(
@@ -7,7 +8,7 @@ def _register_generic(
         module_name : str,
         module : object,
         ):
-    assert module_name not in module_dict, print(
+    assert module_name not in module_dict, logging.info(
         module_name, module_dict, 'defined in several script files')
     module_dict[module_name] = module
 

@@ -199,3 +199,6 @@ third_party/leaderboard/data/scenarios/town03_all_scenarios_extra.json
 third_party/leaderboard/data/scenarios/town04_all_scenarios_extra.json
 third_party/leaderboard/data/scenarios/town05_all_scenarios_extra.json
 third_party/leaderboard/data/scenarios/town06_all_scenarios_extra.json
+
+# auto-generated documentation
+docs/build

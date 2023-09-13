@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Tuple, Dict, Any
 
 import torch
 from torch import nn
@@ -9,7 +9,14 @@ from codriving import CODRIVING_REGISTRY
 
 @CODRIVING_REGISTRY.register
 class CompoundLoss(nn.Module):
-    def __init__(self, loss_configs):
+    """
+    Compound loss, useful for weighting multiple losses
+    """
+    def __init__(self, loss_configs : Dict):
+        """
+        Args:
+            loss_configs: config of losses
+        """
         super(CompoundLoss, self).__init__()
         self.loss_names = list()
         self.loss_modules = nn.ModuleList()
@@ -20,17 +27,21 @@ class CompoundLoss(nn.Module):
                 CODRIVING_REGISTRY, loss_item['config']))
             self.loss_weights.append(loss_item['weight'])
 
-    def forward(self, batch_data : Dict, model_output : Dict):
-        """
-        Forward behavior
+    def forward(
+            self,
+            batch_data : Dict,
+            model_output : Dict,
+            ) -> Tuple[torch.Tensor, Dict[str, Any]]:
+        """Forward behavior
 
         Args:
-            batch_data (Dict): loaded batch data
-            model_output (Dict): output from model
+            batch_data: loaded batch data
+            model_output: output from model
 
-        Returns:
-            torch.Tensor: loss to be back propagated
-            Dict: extra information
+        Return:
+            Tuple[torch.Tensor, Dict]:
+            - first element: loss to be back propagated
+            - second element: extra information
         """
         reduced_loss = 0
         detached_losses = dict()

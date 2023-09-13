@@ -3,9 +3,9 @@ import logging
 
 
 def initialize_root_logger(path : str) -> logging.Logger:
-    """
-    Define a root logger
-    NOTE: debug information is set to be output via stream (stdout)
+    """Define a root logger
+
+        NOTE: debug information is set to be output via stream (stdout)
         and is not going to be written to log file (for log simplicity).
         Thus, set INFO level to message that you want to output to log file.
 

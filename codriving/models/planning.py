@@ -87,15 +87,17 @@ class WaypointPlanner(nn.Module):
     
 
     def forward(self, input_data : Dict) -> torch.Tensor:
-        """forward method for WaypointPlanner
+        """Forward method for WaypointPlanner
 
         Args:
-            input_data (dict): input data to forward
-                required keys: 
-                    occupancy: rasterized map from perception results
-                    target: target point to go to
+            input_data: input data to forward
 
-        Returns:
+                required keys:
+
+                - occupancy: rasterized map from perception results
+                - target: target point to go to
+
+        Return:
             torch.Tensor: predicted waypoints
         """
         occupancy = input_data["occupancy"]  # B,T,C,H,W = [B, 5, 6, 384, 192]

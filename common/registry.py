@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 from copy import deepcopy
 import logging
 
@@ -37,10 +37,22 @@ class Registry(dict):
     >>> result = REGISTRY_NAME[module_name](*args, **kwargs)
     """
     def __init__(self, name : str='Registry', **kwargs):
+        """
+        Args:
+            name: name of the registry
+        """
         self.name = name
         super(Registry, self).__init__(**kwargs)
 
     def register(self, module : object) -> object:
+        """Register module (class/functino/etc.) into this registry
+
+        Args:
+            module: python object that needs to be registered
+
+        Returns:
+            the registered module
+        """
         name = module.__name__
         _register_generic(self, name, module)
 
@@ -49,12 +61,27 @@ class Registry(dict):
 
 def build_object_within_registry_from_config(
     registry : Registry, config : Dict, **kwargs,
-):
-    """
-    Build object within a registry from config
-    Config should be in form of keyword arguments (dict-like)
-    Support adding additional config items through kwargs
-        NOTE: kwargs will not be deep-copied
+) -> Any:
+    """Builder function to build object within a registry from config.
+
+    Config should be in form of keyword arguments (dict-like).
+    Support adding additional config items through kwargs.
+
+    NOTE: kwargs will not be deep-copied
+
+    Args:
+        registry: registry to retrieve class to construct
+        config: config function that provide the class name and the corresponding arguments,
+            which should be arranged in the following format:
+
+                .. code-block:: YAML
+
+                    type: TYPENAME
+                    arg1: value1
+                    arg2: value2
+                    ...
+
+        **kwargs: key-word arguments to be passed to the retrieved class function
     """
     config = deepcopy(config)
     config.update(kwargs)

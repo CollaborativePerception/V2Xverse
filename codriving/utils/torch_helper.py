@@ -11,12 +11,11 @@ def move_dict_data_to_device(
     device : Union[str, torch.device],
     ):
     """
-    Move data to a specific device
-    Assume data contained in a dicionary
+    Move data to a specific device. Assume data contained in a dicionary
 
     Args:
-        data (Dict): data contained in a flattend (non-hierarchical) dicionary.
-        device (Union[str, torch.device]): destination device of the data
+        data: data contained in a flattend (non-hierarchical) dicionary.
+        device: destination device of the data
     """
     for k in data:
         data[k] = data[k].to(device)
@@ -30,12 +29,16 @@ def build_dataloader(
     Build dataloader given config
 
     Args:
-        config : Dict, config in the following format:
-            config
-            |-- dataset: ...
-            |-- distributed_sampler: ...
-            |-- dataloader: ...
-        is_distributed (bool): whether running in distributed environment
+        config: dict config in the following format
+
+            .. code-block::
+
+                config
+                | -- dataset: ...
+                | -- distributed_sampler: ...
+                | -- dataloader: ...
+        is_distributed: whether running in distributed environment
+
     Return:
         DataLoader: built dataloader
     """

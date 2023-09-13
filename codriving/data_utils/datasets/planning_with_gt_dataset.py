@@ -1,5 +1,5 @@
+from typing import List, Dict, Any, Iterable
 import os
-
 import copy
 import re
 import io
@@ -23,38 +23,49 @@ from codriving import CODRIVING_REGISTRY
 # CarlaMVDetDataset_planner
 @CODRIVING_REGISTRY.register
 class CarlaMVDatasetWithGTInput(BaseIODataset):
-	"""
-    Carla multi-vehicle dataset with ground-truth as input data
+	"""Carla multi-vehicle dataset with ground-truth as input data
 
-    TODO: change to a more informative name.
+	TODO: change to a more informative name.
     """
+
+	route_frames : List
+	"""records file paths for the ego vehicle.
+
+	.. code-block::
+
+		structure:
+			list[
+				tuple(
+					str, # verify the path
+					int  # verify the start frame
+				), ...
+			]
+		example:
+			[
+				(/GPFS/public/InterFuser/dataset_cop3_example/weather-0/data/routes_town05_long_w0_02_15_02_37_28/ego_vehicle_0, 0),
+				(/GPFS/public/InterFuser/dataset_cop3_example/weather-0/data/routes_town05_long_w0_02_15_02_37_28/ego_vehicle_0, 5)
+			]
+	"""
+
 	def __init__(
 		self,
 		root,
 		towns,
 		weathers,
-		input_frame=5,
-		output_points=10,
-        det_range=[36, 12, 12, 12, 0.125]
+		input_frame : int=5,
+		output_points : int=10,
+        det_range : Iterable[int]=(36, 12, 12, 12, 0.125),
 	):
-		'''
+		"""
 		Initialize Carla dataset. [KEY] contribution: self.route_frames.
 
-
-		Contributions
-		----------------
-		self.route_frames: records file paths for the ego vehicle.
-			structure:  list[
-							tuple(
-								str, # verify the path  
-								int  # verify the start frame
-							), ...
-						]
-			example: [
-					  (/GPFS/public/InterFuser/dataset_cop3_example/weather-0/data/routes_town05_long_w0_02_15_02_37_28/ego_vehicle_0, 0), 
-					  (/GPFS/public/InterFuser/dataset_cop3_example/weather-0/data/routes_town05_long_w0_02_15_02_37_28/ego_vehicle_0, 5)
-					 ]
-		'''
+		Args:
+			towns: TODO (weibo)
+			weathers: TODO (weibo)
+			input_frame: TODO (weibo)
+			output_points: TODO (weibo)
+			det_range: TODO (weibo)
+		"""
 		super().__init__()
 		
 		self.input_frame = input_frame # number of input frames
@@ -101,29 +112,19 @@ class CarlaMVDatasetWithGTInput(BaseIODataset):
 		return len(self.route_frames)
 
 
-	def get_one_record(self, route_dir, frame_id):
-		'''
-		Parameters
-		----------
-		scene_dict: str, index given by dataloader.
-		frame_id: int, start frame id.
+	def get_one_record(self,
+			route_dir : str,
+			frame_id : int,
+		) -> Dict[str, Any]:
+		"""Read data of one record
 
-		Returns
-		-------
-		data:  
-			structure: dict{
-				####################
-				# input to the model
-				####################
-				
-				
-				####################
-				# target of model
-				####################
-				
-				
-		},
-		'''
+		Args:
+			scene_dict: index given by dataloader
+			frame_id: start frame id
+
+		Return:
+			batch data, including model input and training target
+		"""
 		output_record = {
 			'occupancy_map': [],   # T=5, H=20, W=40
 			'occupancy_ego': [],   # T=5, H=20, W=40
@@ -350,23 +351,23 @@ class CarlaMVDatasetWithGTInput(BaseIODataset):
 
 
 
-	def __getitem__(self, idx):
-		'''
+	def __getitem__(self, idx : int) -> Dict:
+		"""
 		Given the index, return the corresponding data. 
 
-		Parameters
-		----------
-		idx : int, index given by dataloader.
+		Args:
+			idx: index given by dataloader.
 
-		Returns
-		-------
-		output_dict:
-			structure: list[
-				dict{
-				}, ... # see details for this dict in `get_one_record`
-			] # len = 'num_cars'
-			
-		'''
+		Return:
+			output_dict: batched data in the following format:
+
+				.. code-block::
+
+					structure: list[
+						dict{
+						}, ... # see details for this dict in `get_one_record`
+					] # len = 'num_cars'
+		"""
 		
 		scene, frame_id = self.route_frames[idx]
 		output_dict = self.get_one_record(scene, frame_id)
@@ -378,31 +379,24 @@ class CarlaMVDatasetWithGTInput(BaseIODataset):
 		return output_dict
 
 	@classmethod
-	def collate_fn(cls, batch):
-		'''
-		Re-collate a batch
+	def collate_fn(cls, batch : List) -> Dict:
+		"""Re-collate a batch.
 
-		Parameters
-		----------
-		batch : list, a batch of data len(batch)=batch_size
-		batch[i]: the ith data in the batch
-		batch[i][j]: the jth car in batch[i], batch[i][0] always center ego
+		Args:
+			batch: a batch of data len(batch)=batch_size
 
-		* Note
-		BN = Σ_{i=0}^{B-1}(N_i)  # N_i is the num_car of the ith data in the batch
+				- batch[i]: the ith data in the batch
+				- batch[i][j]: the jth car in batch[i], batch[i][0] always center ego
 
-		Returns
-		-------
-		output_dict:  # input to the model
-			dict{
-				'occupancy': torch.Tensor, size [B, 5, 2, 40, 20]
-			},
-		tuple(         # target of model output
-				command_waypoints: torch.Tensor, size [B, 10]
+				NOTE: BN = Σ_{i=0}^{B-1}(N_i)  # N_i is the num_car of the ith data in the batch
 
-		)
-		'''
+		Returns:
+			batch data
 
+				- model input: dict{'occupancy': torch.Tensor, size [B, 5, 2, 40, 20]},
+				- model target: tuple(command_waypoints: torch.Tensor, size [B, 10])
+
+		"""
 		output_dict = {}
 		occupancy = []
 		future_waypoints = []

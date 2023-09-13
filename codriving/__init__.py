@@ -8,8 +8,11 @@ from torch import nn
 from common import Registry
 CODRIVING_REGISTRY = Registry('codriving')  # TODO (yinda): resolve this order-sensitive code
 import codriving.data_utils
-import codriving.models
-import codriving.losses
+from codriving import models
+from codriving import losses
+
+
+__all__ = ['models', 'losses']
 
 
 def _register_all_classes_within_module(m):

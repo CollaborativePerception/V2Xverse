@@ -1,3 +1,5 @@
+from typing import Tuple, Dict, Any
+
 import torch
 from torch import nn
 
@@ -6,8 +8,7 @@ from codriving import CODRIVING_REGISTRY
 
 @CODRIVING_REGISTRY.register
 class WaypointL1Loss(nn.Module):
-    """
-    Loss for supervising waypoint predictor
+    """Loss for supervising waypoint predictor
     """
     def __init__(self, l1_loss=torch.nn.L1Loss):
         super(WaypointL1Loss, self).__init__()
@@ -27,7 +28,21 @@ class WaypointL1Loss(nn.Module):
             0.04450719328435308,
         ]
 
-    def __call__(self, batch_data, model_output):
+    def forward(self,
+                batch_data : Dict,
+                model_output : Dict,
+        ) -> Tuple[torch.Tensor, Dict[str, Any]]:
+        """Compute loss
+
+        Args:
+            batch_data: loaded batch data
+            model_output: output from model
+
+        Return:
+            Tuple[torch.Tensor, Dict]:
+            - first element: loss to be back propagated
+            - second element: extra information
+        """
         output = model_output['future_waypoints']
         target = batch_data['future_waypoints']
         loss = self.loss(output, target)  # shape: n, 12, 2

@@ -7,7 +7,6 @@ import torch
 from torch import nn
 import torch.utils.data
 from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
-
 from common.random import set_random_seeds
 from common.registry import build_object_within_registry_from_config
 from common.io import load_config_from_yaml
@@ -19,7 +18,6 @@ from codriving.utils.torch_helper import \
     move_dict_data_to_device, build_dataloader
 from codriving.utils import initialize_root_logger
 
-
 logger = logging.getLogger("train")
 
 
@@ -30,7 +28,7 @@ def parse_args():
     parser.add_argument(
         "-c",
         "--config-file",
-        default="",
+        default="./codriving/hypes_yaml/codriving/planner.yaml",
         type=str,
         metavar="FILE",
         help="Config file for training",

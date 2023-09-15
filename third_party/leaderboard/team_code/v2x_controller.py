@@ -1,6 +1,6 @@
 import numpy as np
 from collections import deque
-from team_code.render_mwb import render, render_self_car
+from team_code.render_v2x import render, render_self_car
 
 class PIDController(object):
     def __init__(self, K_P=1.0, K_I=0.0, K_D=0.0, n=20):

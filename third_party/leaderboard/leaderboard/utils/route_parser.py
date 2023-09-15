@@ -10,6 +10,7 @@ from collections import OrderedDict
 import json
 import math
 import xml.etree.ElementTree as ET
+from typing import List
 
 import carla
 from agents.navigation.local_planner import RoadOption
@@ -151,7 +152,7 @@ class RouteParser(object):
         return weather
 
     @staticmethod
-    def check_trigger_position(new_trigger, existing_triggers):
+    def check_trigger_position(new_trigger: OrderedDict, existing_triggers: OrderedDict):
         """
         Check if this trigger position already exists or if it is a new one.
         :param new_trigger:
@@ -183,11 +184,13 @@ class RouteParser(object):
         waypoint['yaw'] = float(waypoint['yaw'])
 
     @staticmethod
-    def match_world_location_to_route(world_location, route_description):
+    def match_world_location_to_route(world_location: OrderedDict, route_description: List):
         """
         We match this location to a given route.
-            world_location:
-            route_description:
+            world_location: trigger point
+            route_description: list of waypoints
+        Return:
+            The first waypoint that is close enough to the trigger point or None
         """
         def match_waypoints(waypoint1, wtransform):
             """
@@ -298,8 +301,14 @@ class RouteParser(object):
         """
         Just returns a plain list of possible scenarios that can happen in this route by matching
         the locations from the scenario into the route description
-
-        :return:  A list of scenario definitions with their correspondent parameters
+        Args:
+            route_name: the town that route belongs to
+            trajectory: list of fine grained waypoints location
+            world_annotations: every possible scenario trigger point
+        Return:  
+            A list of scenario definitions with their correspondent parameters
+            possible_scenarios: OrderedDict, len(possible_scenarios) is the number of position that is possible to trigger scenarios along this route, 
+                                and possible_scenarios[i] is a list of scenarios that is possible to be triggered at the ith position
         """
 
         # the triggers dictionaries:
@@ -316,8 +325,8 @@ class RouteParser(object):
 
             scenarios = world_annotations[town_name]
             for scenario in scenarios:  # For each existent scenario
-                print('load')
                 scenario_name = scenario["scenario_type"]
+                print('load all the {}'.format(scenario_name))
                 for event in scenario["available_event_configurations"]:
                     waypoint = event['transform']  # trigger point of this scenario
                     RouteParser.convert_waypoint_float(waypoint)

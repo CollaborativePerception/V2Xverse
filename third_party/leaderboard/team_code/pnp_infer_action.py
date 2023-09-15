@@ -25,13 +25,16 @@ import pdb
 
 from team_code.v2x_controller import V2X_Controller
 from team_code.eval_utils import turn_traffic_into_bbox_fast
-from team_code.render_mwb import render, render_self_car, render_waypoints
+from team_code.render_v2x import render, render_self_car, render_waypoints
 from team_code.v2x_utils import (generate_relative_heatmap, 
 				 generate_heatmap, generate_det_data,
 				 get_yaw_angle, boxes_to_corners_3d, get_points_in_rotated_box_3d  # visibility related functions
 				 )
 
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+from opencood.tools import train_utils
+from opencood.tools import train_utils, inference_utils
+from opencood.visualization import vis_utils, my_vis, simple_vis_multiclass
 
 ####### Input: raw_data, N(actor)+M(RSU)
 ####### Output: actors action, N(actor)
@@ -187,23 +190,16 @@ def turn_back_into_theta(input):
     assert output.shape[2] == input.shape[2]
     return output
 
-def turn_traffic_into_map(pred_traffic, det_range):
+def turn_traffic_into_map(all_bbox, det_range):
     data_total = []
-    for idx in range(pred_traffic.shape[0]):
-        all_bbox = []
-        cls_num = pred_traffic.shape[1]
-        for i in range(cls_num):
-            map_cur = pred_traffic[idx, i]
-            object_bbox, _ = turn_traffic_into_bbox_fast(map_cur,det_range)
-            if len(object_bbox) > 0:
-                all_bbox.append(object_bbox)
+    for idx in range(1):
 
-        if len(all_bbox) > 0:
-            all_bbox = np.concatenate(all_bbox,axis=0)
-        else:
+        if len(all_bbox) < 0:
             all_bbox = np.zeros((1,4,2))
         # plt.cla()
 
+		# print('all_box:\n',all_bbox)
+        print('boxes: \n:', all_bbox)
         fig = plt.figure(figsize=(6, 12), dpi=16)
         plt.gca().xaxis.set_major_locator(plt.NullLocator())
         plt.gca().yaxis.set_major_locator(plt.NullLocator())
@@ -353,7 +349,7 @@ def warp_image(det_pose, occ_map):
 
 
 class PnP_infer():
-	def __init__(self, config=None, ego_vehicles_num=1, perception_model=None, planning_model=None) -> None:
+	def __init__(self, config=None, ego_vehicles_num=1, perception_model=None, planning_model=None, perception_dataloader=None, device=None) -> None:
 		self.config = config
 		self._hic = DisplayInterface()
 		self.ego_vehicles_num = ego_vehicles_num
@@ -379,6 +375,8 @@ class PnP_infer():
 
 		self.perception_model = perception_model
 		self.planning_model = planning_model
+		self.perception_dataloader = perception_dataloader
+		self.device=device
 
 		self.perception_memory_bank = [{}]
 
@@ -438,10 +436,22 @@ class PnP_infer():
 		### Check the data is None or not.
 		### If the data is not None, return the filtered data with new keys
 		### 	for batch collection.
+		### data for visualization and planning
 		car_data, car_mask = self.check_data(car_data_raw)
 		rsu_data, _ = self.check_data(rsu_data_raw, car=False)
 		batch_data = self.collate_batch_infer_perception(car_data, rsu_data)  # batch_size: N*(N+M)
-		# batch_data for perception
+
+		### data for perception
+		extra_source = {}
+		actors_data = self.collect_actor_data()
+		for data in car_data_raw + rsu_data_raw:
+			data['actors_data'] = actors_data
+		extra_source['car_data'] = car_data_raw
+		extra_source['rsu_data'] = rsu_data_raw
+		data = self.perception_dataloader.__getitem__(idx=None, extra_source=extra_source)
+		batch_data_perception = [data]
+		batch_data_perception = self.perception_dataloader.collate_batch_test(batch_data_perception)
+		batch_data_perception = train_utils.to_device(batch_data_perception, self.device)
 		
 		### Get peception results!
 		### model inferece: N*(N+M) -> N, generate perception for
@@ -450,18 +460,50 @@ class PnP_infer():
 			# for key in batch_data.keys():
 			# 	print(key, batch_data[key].shape)
 			# pdb.set_trace()
-			perception_output = self.perception_model(batch_data)
+			perception_output = self.perception_model(batch_data_perception['ego'])
 		### batch_size: N
-		perception_output['bbox_preds'] = turn_back_into_theta(perception_output['bbox_preds'])
+		# perception_output['cls_preds'] = perception_output['cls_preds'].unsqueeze(2)
+		# box_preds = perception_output['bbox_preds'].permute(0, 2, 3, 1).contiguous()
+		# box_preds = box_preds.view(box_preds.shape[0], box_preds.shape[1], box_preds.shape[2], int(box_preds.shape[3]/8), 8)
+		# perception_output['bbox_preds'] = box_preds.permute(0, 3, 4, 1, 2)
+		# perception_output['bbox_preds'] = turn_back_into_theta(perception_output['bbox_preds'])
 		
-		pred_traffic = torch.cat((perception_output['cls_preds'].sigmoid(), perception_output['bbox_preds']), dim=2).permute(0, 1, 3, 4, 2).cpu().numpy()
-		# N, K, H, W, C=7
-		occ_map = turn_traffic_into_map(pred_traffic, self.det_range)
+		infer_result = inference_utils.inference_intermediate_fusion_multiclass(batch_data_perception,
+														self.perception_model,
+														self.perception_dataloader)
+
+		attrib_list = ['pred_box_tensor', 'pred_score', 'gt_box_tensor']
+		for attrib in attrib_list:
+			if isinstance(infer_result[attrib], list):
+				infer_result_tensor = []
+				for i in range(len(infer_result[attrib])):
+					if infer_result[attrib][i] is not None:
+						infer_result_tensor.append(infer_result[attrib][i])
+				if len(infer_result_tensor)>0:
+					infer_result[attrib] = torch.cat(infer_result_tensor, dim=0)
+				else:
+					infer_result[attrib] = None
+
+		vis_save_path = os.path.join('/GPFS/data/gjliu/Auto-driving/Cop3/results/v2xverse', 'bev_%05d.png' % step)
+		simple_vis_multiclass.visualize(infer_result,
+							batch_data_perception['ego'][
+								'origin_lidar'][0],
+							self.config.perception_hypes['postprocess']['gt_range'],
+							vis_save_path,
+							method='bev',
+							left_hand=False)
+		print('box_tensor:', infer_result['pred_box_tensor'])
+		tmp = infer_result['pred_box_tensor'][:,:4,0].clone()
+		infer_result['pred_box_tensor'][:,:4,0]=infer_result['pred_box_tensor'][:,:4,1]
+		infer_result['pred_box_tensor'][:,:4,1] = tmp
+		occ_map = turn_traffic_into_map(infer_result['pred_box_tensor'][:,:4,:2].cpu(), self.det_range)
+
+		# pred_traffic = torch.cat((perception_output['cls_preds'].sigmoid(), perception_output['bbox_preds']), dim=2).permute(0, 1, 3, 4, 2).cpu().numpy()
+		# # N, K, H, W, C=7
+		# occ_map = turn_traffic_into_map(pred_traffic, self.det_range)
 		occ_map_shape = occ_map.shape
 		occ_map = torch.from_numpy(occ_map).cuda().contiguous().view((-1, 1) + occ_map_shape[1:]) 
 		# N, 1, H, W
-		
-		
 		da = []
 		for i in range(len(car_data_raw)):
 			da.append(torch.from_numpy(car_data_raw[i]['drivable_area']).cuda().float().unsqueeze(0))
@@ -479,9 +521,10 @@ class PnP_infer():
 		
 
 		#### Turn the memoried perception output into planning input
-		planning_input = self.generate_planning_input()
+		planning_input = self.generate_planning_input() # planning_input['occupancy'] [1, 5, 6, 192, 96] planning_input['target'] [1,2]
 
-		predicted_waypoints = self.planning_model(planning_input)
+		predicted_waypoints = self.planning_model(planning_input) # [1, 10, 2]
+		predicted_waypoints = predicted_waypoints['future_waypoints']
 		# predicted_waypoints: N, T_f=10, 2
 
 		### output postprocess to generate the action, list of actions for N agents
@@ -945,8 +988,11 @@ class PnP_infer():
 			data[_id]["box"] = [box.x, box.y, box.z]
 			vel = actor.get_velocity()
 			data[_id]["vel"] = [vel.x, vel.y, vel.z]
-			data[_id]["tpe"] = 0
-
+			if actor.type_id=="vehicle.diamondback.century":
+				data[_id]["tpe"] = 3
+			else:
+				data[_id]["tpe"] = 0
+		
 		walkers = CarlaDataProvider.get_world().get_actors().filter("*walker*")
 		for actor in walkers:
 			loc = actor.get_location()

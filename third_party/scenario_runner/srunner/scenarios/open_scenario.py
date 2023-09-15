@@ -20,6 +20,7 @@ from srunner.scenariomanager.timer import GameTime
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.openscenario_parser import OpenScenarioParser
 from srunner.tools.py_trees_port import Decorator, oneshot_behavior
+from . import ScenarioClassRegistry
 
 
 def repeatable_behavior(behaviour, name=None):
@@ -167,6 +168,7 @@ def get_xml_path(tree, node):
     return path
 
 
+@ScenarioClassRegistry.register
 class OpenScenario(BasicScenario):
 
     """

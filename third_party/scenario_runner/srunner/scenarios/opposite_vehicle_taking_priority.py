@@ -46,18 +46,6 @@ class OppositeVehicleRunningRedLight(BasicScenario):
     This is a single ego vehicle scenario
     """
 
-    # ego vehicle parameters
-    _ego_max_velocity_allowed = 20       # Maximum allowed velocity [m/s]
-    _ego_avg_velocity_expected = 4       # Average expected velocity [m/s]
-    _ego_expected_driven_distance = 70   # Expected driven distance [m]
-    _ego_distance_to_traffic_light = 32  # Trigger distance to traffic light [m]
-    _ego_distance_to_drive = 40          # Allowed distance to drive
-
-    # other vehicle
-    _other_actor_target_velocity = 10      # Target velocity of other vehicle
-    _other_actor_max_brake = 1.0           # Maximum brake of other vehicle
-    _other_actor_distance = 50             # Distance the other vehicle should drive
-
     _traffic_light = None
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,scenario_parameter=None,
@@ -67,6 +55,30 @@ class OppositeVehicleRunningRedLight(BasicScenario):
         and instantiate scenario manager
         """
 
+        if scenario_parameter is None:
+             # ego vehicle parameters
+            self._ego_max_velocity_allowed = 20       # Maximum allowed velocity [m/s]
+            self._ego_avg_velocity_expected = 4       # Average expected velocity [m/s]
+            self._ego_expected_driven_distance = 70   # Expected driven distance [m]
+            self._ego_distance_to_traffic_light = 32  # Trigger distance to traffic light [m]
+            self._ego_distance_to_drive = 40          # Allowed distance to drive
+
+            # other vehicle
+            self._other_actor_target_velocity = 10      # Target velocity of other vehicle
+            self._other_actor_max_brake = 1.0           # Maximum brake of other vehicle
+            self._other_actor_distance = 50             # Distance the other vehicle should drive
+        else:
+            # ego vehicle parameters
+            self._ego_max_velocity_allowed = scenario_parameter['ego_max_velocity_allowed']
+            self._ego_avg_velocity_expected = scenario_parameter['ego_avg_velocity_expected']
+            self._ego_expected_driven_distance = scenario_parameter['ego_expected_driven_distance']
+            self._ego_distance_to_traffic_light = scenario_parameter['ego_distance_to_traffic_light']
+            self._ego_distance_to_drive = scenario_parameter['ego_distance_to_drive']
+
+            # other vehicle
+            self._other_actor_target_velocity = scenario_parameter['other_actor_target_velocity']
+            self._other_actor_max_brake = scenario_parameter['other_actor_max_brake']
+            self._other_actor_distance = scenario_parameter['other_actor_distance']
         self._other_actor_transform = None
 
         # Timeout of scenario in seconds
@@ -203,12 +215,12 @@ class OppositeVehicleRunningRedLight(BasicScenario):
 
         max_velocity_criterion = MaxVelocityTest(
             self.ego_vehicles[0],
-            self._ego_max_velocity_allowed,
+            self.self._ego_max_velocity_allowed,
             optional=True)
         collision_criterion = CollisionTest(self.ego_vehicles[0])
         driven_distance_criterion = DrivenDistanceTest(
             self.ego_vehicles[0],
-            self._ego_expected_driven_distance)
+            self.self._ego_expected_driven_distance)
 
         criteria.append(max_velocity_criterion)
         criteria.append(collision_criterion)

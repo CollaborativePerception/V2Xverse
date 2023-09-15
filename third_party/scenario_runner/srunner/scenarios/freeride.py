@@ -15,7 +15,9 @@ from srunner.scenariomanager.scenarioatomics.atomic_behaviors import Idle
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
 from srunner.scenarios.basic_scenario import BasicScenario
 
+from . import ScenarioClassRegistry
 
+@ScenarioClassRegistry.register
 class FreeRide(BasicScenario):
 
     """
@@ -36,7 +38,7 @@ class FreeRide(BasicScenario):
                                        debug_mode,
                                        criteria_enable=criteria_enable)
 
-    def _setup_scenario_trigger(self, config):
+    def _setup_scenario_trigger(self, config, ego_vehicle_id):
         """
         """
         return None

@@ -396,7 +396,7 @@ class LeaderboardEvaluator(object):
                 [tf.freeze(True) for tf in self.world.get_actors().filter("*traffic_light*") if hasattr(tf,"freeze")]
             self._prepare_ego_vehicles(config.ego_vehicles, False)
             scenario = RouteScenario(world=self.world, config=config, debug_mode=args.debug, \
-                ego_vehicles_num=self.ego_vehicles_num, crazy_level=args.crazy_level, crazy_propotion=args.crazy_propotion, log_dir=log_dir)
+                ego_vehicles_num=self.ego_vehicles_num, crazy_level=args.crazy_level, crazy_proportion=args.crazy_proportion, log_dir=log_dir)
             config.trajectory=scenario.get_new_config_trajectory()
             # print("\n\n")
             # print(config.trajectory)
@@ -598,9 +598,9 @@ def main():
                         help="Path to checkpoint used for saving statistics and resuming")
     parser.add_argument('--ego-num', type=int, default=1, help='The number of ego vehicles')
     # crazy level: 0-5, the probability of ignoring front car.
-    # crazy propotion: the probability of a car is crazy 
+    # crazy proportion: the probability of a car is crazy 
     parser.add_argument('--crazy-level',type=int,  default=3, help='Level background vehicles driving obey rule')
-    parser.add_argument('--crazy-propotion', type=int, default=70, help='The number of background vehicles driving obey rule')
+    parser.add_argument('--crazy-proportion', type=int, default=70, help='The number of background vehicles driving obey rule')
 
                     
 

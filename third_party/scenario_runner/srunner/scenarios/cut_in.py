@@ -23,12 +23,15 @@ from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (ActorTransformSetter,
                                                                       LaneChange,
                                                                       WaypointFollower,
-                                                                      AccelerateToCatchUp)
+                                                                      AccelerateToCatchUp,
+                                                                      Idle)
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
 from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import InTriggerDistanceToVehicle, DriveDistance
 from srunner.scenarios.basic_scenario import BasicScenario
+from srunner.tools.scenario_helper import get_location_in_distance_from_wp,get_location_previous_from_wp,generate_target_waypoint_and_roadoption_in_route
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class CutIn(BasicScenario):
 
     """
@@ -45,9 +48,16 @@ class CutIn(BasicScenario):
         self._map = CarlaDataProvider.get_map()
         self._reference_waypoint = self._map.get_waypoint(config.trigger_points[0].location)
 
-        self._velocity = 40
-        self._delta_velocity = 10
-        self._trigger_distance = 30
+        if scenario_parameter is None:
+            self._velocity = 40
+            self._delta_velocity = 10
+            self._trigger_distance = 30
+            self._catch_distance = 40
+        else:
+            self._velocity = scenario_parameter["velocity"]
+            self._delta_velocity = scenario_parameter["delta_velocity"]
+            self._trigger_distance = scenario_parameter["trigger_distance"]
+            self._catch_distance = scenario_parameter["catch_distance"]
 
         # get direction from config name
         self._config = config
@@ -66,27 +76,35 @@ class CutIn(BasicScenario):
             self._trigger_distance = random.randint(10, 40)
 
     def _initialize_actors(self, config):
+        
+        waypoint = self._reference_waypoint
+        vehicle_waypoint = None
+        wp_next = waypoint.get_right_lane()
+        if wp_next is None or wp_next.lane_type == carla.LaneType.Sidewalk:
+            vehicle_waypoint = None
+        elif wp_next.lane_type == carla.LaneType.Driving:
+            waypoint = wp_next
+        else:
+            vehicle_waypoint = None
 
-        # direction of lane, on which other_actor is driving before lane change
-        if 'LEFT' in self._config.name.upper():
+
+        if vehicle_waypoint is not None:
+            print("SUCCESS CUTIN")
+            vehicle_waypoint, _ = get_location_previous_from_wp(waypoint,self._catch_distance)
             self._direction = 'left'
-
-        if 'RIGHT' in self._config.name.upper():
-            self._direction = 'right'
-
-        # add actors from xml file
-        for actor in config.other_actors:
-            vehicle = CarlaDataProvider.request_new_actor(actor.model, actor.transform)
+            other_actor_transform = vehicle_waypoint.transform
+            vehicle = CarlaDataProvider.request_new_actor("vehicle.*", other_actor_transform)
             self.other_actors.append(vehicle)
             vehicle.set_simulate_physics(enabled=False)
+            self._transform_visible = carla.Transform(
+                carla.Location(other_actor_transform.location.x,
+                            other_actor_transform.location.y,
+                            other_actor_transform.location.z + 1.5),
+                            other_actor_transform.rotation)
+        else:
+            pass
 
-        # transform visible
-        other_actor_transform = self.other_actors[0].get_transform()
-        self._transform_visible = carla.Transform(
-            carla.Location(other_actor_transform.location.x,
-                           other_actor_transform.location.y,
-                           other_actor_transform.location.z + 105),
-            other_actor_transform.rotation)
+
 
     def _create_behavior(self):
         """
@@ -97,47 +115,53 @@ class CutIn(BasicScenario):
         - lane_change: change the lane
         - endcondition: drive for a defined distance
         """
+        if self._transform_visible is not None:
+            # car_visible
+            behaviour = py_trees.composites.Sequence("CarOn_{}_Lane" .format(self._direction))
+            car_visible = ActorTransformSetter(self.other_actors[0], self._transform_visible)
+            behaviour.add_child(car_visible)
 
-        # car_visible
-        behaviour = py_trees.composites.Sequence("CarOn_{}_Lane" .format(self._direction))
-        car_visible = ActorTransformSetter(self.other_actors[0], self._transform_visible)
-        behaviour.add_child(car_visible)
+            # just_drive
+            just_drive = py_trees.composites.Parallel(
+                "DrivingStraight", policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ONE)
 
-        # just_drive
-        just_drive = py_trees.composites.Parallel(
-            "DrivingStraight", policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ONE)
+            car_driving = WaypointFollower(self.other_actors[0], self._velocity)
+            just_drive.add_child(car_driving)
 
-        car_driving = WaypointFollower(self.other_actors[0], self._velocity)
-        just_drive.add_child(car_driving)
+            trigger_distance = InTriggerDistanceToVehicle(
+                self.other_actors[0], self.ego_vehicles[0], self._trigger_distance)
+            just_drive.add_child(trigger_distance)
+            behaviour.add_child(just_drive)
 
-        trigger_distance = InTriggerDistanceToVehicle(
-            self.other_actors[0], self.ego_vehicles[0], self._trigger_distance)
-        just_drive.add_child(trigger_distance)
-        behaviour.add_child(just_drive)
+            # accelerate
+            accelerate = AccelerateToCatchUp(self.other_actors[0], self.ego_vehicles[0], throttle_value=1,
+                                            delta_velocity=self._delta_velocity, trigger_distance=5, max_distance=500)
+            behaviour.add_child(accelerate)
 
-        # accelerate
-        accelerate = AccelerateToCatchUp(self.other_actors[0], self.ego_vehicles[0], throttle_value=1,
-                                         delta_velocity=self._delta_velocity, trigger_distance=5, max_distance=500)
-        behaviour.add_child(accelerate)
+            # lane_change
+            if self._direction == 'left':
+                lane_change = LaneChange(
+                    self.other_actors[0], speed=None, direction='right', distance_same_lane=5, distance_other_lane=300)
+                behaviour.add_child(lane_change)
+            else:
+                lane_change = LaneChange(
+                    self.other_actors[0], speed=None, direction='left', distance_same_lane=5, distance_other_lane=300)
+                behaviour.add_child(lane_change)
 
-        # lane_change
-        if self._direction == 'left':
-            lane_change = LaneChange(
-                self.other_actors[0], speed=None, direction='right', distance_same_lane=5, distance_other_lane=300)
-            behaviour.add_child(lane_change)
+            # endcondition
+            endcondition = DriveDistance(self.other_actors[0], 200)
+
+            # build tree
+            root = py_trees.composites.Sequence("Behavior", policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ONE)
+            root.add_child(behaviour)
+            root.add_child(endcondition)
+            
+            return root
+        
         else:
-            lane_change = LaneChange(
-                self.other_actors[0], speed=None, direction='left', distance_same_lane=5, distance_other_lane=300)
-            behaviour.add_child(lane_change)
-
-        # endcondition
-        endcondition = DriveDistance(self.other_actors[0], 200)
-
-        # build tree
-        root = py_trees.composites.Sequence("Behavior", policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ONE)
-        root.add_child(behaviour)
-        root.add_child(endcondition)
-        return root
+            sequence = py_trees.composites.Sequence("Sequence Behavior")
+            sequence.add_child(Idle())
+            return sequence
 
     def _create_test_criteria(self):
         """

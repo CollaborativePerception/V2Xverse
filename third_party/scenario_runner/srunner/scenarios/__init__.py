@@ -13,3 +13,8 @@ from .opposite_vehicle_taking_priority import OppositeVehicleRunningRedLight
 from .other_leading_vehicle import OtherLeadingVehicle
 from .signalized_junction_left_turn import SignalizedJunctionLeftTurn
 from .signalized_junction_right_turn import SignalizedJunctionRightTurn
+from .construction_crash_vehicle import ConstructionSetupCrossing
+from .change_lane import ChangeLane
+from .opposite_vehicle_taking_priority import OppositeVehicleRunningRedLight
+from .cut_in import CutIn
+from .freeride import FreeRide

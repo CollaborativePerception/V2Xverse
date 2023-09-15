@@ -28,22 +28,24 @@ import copy
 import signal
 import torch
 
-sys.path.append("/GPFS/data/gjliu/Auto-driving/Cop3/scenario_runner")
-sys.path.append("/GPFS/data/gjliu/Auto-driving/Cop3/leaderboard")
+sys.path.append("/GPFS/data/gjliu/Auto-driving/V2Xverse/third_party/scenario_runner")
+sys.path.append("/GPFS/data/gjliu/Auto-driving/V2Xverse/third_party/leaderboard")
+sys.path.append("/GPFS/data/gjliu/Auto-driving/V2Xverse")
 sys.path.append('/GPFS/data/gjliu/Auto-driving/Cop3/carla/PythonAPI/carla')
 
 os.environ["CARLA_ROOT"] = '/GPFS/data/gjliu/Auto-driving/Cop3/carla'
 os.environ["DATA_ROOT"] = 'dataset_cop3'
-os.environ["YAML_ROOT"] = 'data_collection/yamls'
-os.environ["ROUTES"]='leaderboard/data/evaluation_routes/routes_town05_debug.xml'
-os.environ["LEADERBOARD_ROOT"]='leaderboard'
+os.environ["YAML_ROOT"] = 'simulation/hypes_yaml'
+os.environ["ROUTES"]='/GPFS/data/gjliu/Auto-driving/Cop3/leaderboard/data/evaluation_routes/final/town05_short_r0.xml'
+os.environ["LEADERBOARD_ROOT"]='third_party/leaderboard'
 os.environ["CHALLENGE_TRACK_CODENAME"]='SENSORS'
+
 # os.environ["PORT"]=2000 # same as the carla server port
 
-os.environ["TEAM_AGENT"]='leaderboard/team_code/auto_pilot.py'
-os.environ["TEAM_CONFIG"]='data_collection/yamls/debug.yaml'
+os.environ["TEAM_AGENT"]='third_party/leaderboard/team_code/pnp_agent.py'   #'third_party/leaderboard/team_code/auto_pilot.py' , 'third_party/leaderboard/team_code/pnp_agent.py' 
+os.environ["TEAM_CONFIG"]='third_party/leaderboard/team_code/pnp_config.py' # 'simulation/hypes_yaml/weather-0.yaml' , 'third_party/leaderboard/team_code/pnp_config.py'
 os.environ["CHECKPOINT_ENDPOINT"]='/GPFS/data/gjliu/Auto-driving/Cop3/results/eval/test/results.json'
-os.environ["SCENARIOS"]='leaderboard/data/scenarios/town05_all_scenarios.json'
+os.environ["SCENARIOS"]='third_party/leaderboard/data/scenarios/town05_all_scenarios.json'
 os.environ["SAVE_PATH"]='/GPFS/data/gjliu/Auto-driving/Cop3/results/eval/test/image'
 
 from srunner.scenariomanager.carla_data_provider import *
@@ -57,10 +59,10 @@ from leaderboard.envs.sensor_interface import SensorInterface, SensorConfigurati
 from leaderboard.autoagents.agent_wrapper import  AgentWrapper, AgentError
 from leaderboard.utils.statistics_manager import StatisticsManager
 from leaderboard.utils.route_indexer import RouteIndexer
-from leaderboard_evaluator import main
+from leaderboard_evaluator_parameter import main
 
 
-# os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 if __name__ == '__main__':
     main()

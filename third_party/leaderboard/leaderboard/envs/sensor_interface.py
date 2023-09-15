@@ -139,11 +139,12 @@ class SpeedometerReader(BaseReader):
 
         speed, vel_np, acc_np, vel_angle_np, transform_dict = self._get_forward_speed(transform=transform, velocity=velocity, acc=acc, vel_angle=vel_angle)
 
-        return {'move_state':{'speed': speed,
-                'speed_xyz': vel_np,
-                'acc_xyz': acc_np,
-                'speed_angle_xyz': vel_angle_np,
-                'transform_xyz_rollyawpitch':transform_dict}}
+        return {'speed': speed,
+                'move_state':{'speed': speed,
+                    'speed_xyz': vel_np,
+                    'acc_xyz': acc_np,
+                    'speed_angle_xyz': vel_angle_np,
+                    'transform_xyz_rollyawpitch':transform_dict}}
 
 
 class OpenDriveMapReader(BaseReader):

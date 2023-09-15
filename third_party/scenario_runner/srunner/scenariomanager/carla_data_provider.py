@@ -745,7 +745,7 @@ class CarlaDataProvider(object):  # pylint: disable=too-many-public-methods
 
     @staticmethod
     def request_new_batch_actors(model, amount, spawn_points, autopilot=False,
-                                 random_location=False, rolename='scenario', crazy_level = 0, crazy_propotion = 0):
+                                 random_location=False, rolename='scenario', crazy_level = 0, crazy_proportion = 0):
         """
         Simplified version of "request_new_actors". This method also create several actors in batch.
 
@@ -764,11 +764,11 @@ class CarlaDataProvider(object):  # pylint: disable=too-many-public-methods
         if (100 - crazy_level*20)<0 or (crazy_level*20)>100 or crazy_level<0:
             raise ValueError("crazy_level set error, crazy level must in [0.1.2.3.4.5]")
 
-        if crazy_propotion > 100 or crazy_propotion < 0:
-            raise ValueError("crazy_propotion shoule be between [0,100]")
+        if crazy_proportion > 100 or crazy_proportion < 0:
+            raise ValueError("crazy_proportion shoule be between [0,100]")
         # for carla batch processing
         batch = []
-        danger_amount = int((crazy_propotion * amount) / 100)
+        danger_amount = int((crazy_proportion * amount) / 100)
         # respectively process walkers and vehicles or bicycles
         if model == 'walker.pedestrian.*':
             spawn_walker_points=[]
@@ -795,10 +795,8 @@ class CarlaDataProvider(object):  # pylint: disable=too-many-public-methods
                     walker_bp.set_attribute('is_invincible', 'false')
                 if walker_bp.has_attribute('speed'):
                     if crazy_level != 0:
-                        if danger_walker_amount <= danger_amount:  #
-                            walker_speed.append(walker_bp.get_attribute('speed').recommended_values[2])  # 
-                            # print(walker_bp.get_attribute('speed').recommended_values)
-                            # time.sleep(1000)
+                        if danger_walker_amount <= danger_amount:
+                            walker_speed.append(walker_bp.get_attribute('speed').recommended_values[2])
                         else:
                             walker_speed.append(walker_bp.get_attribute('speed').recommended_values[1])
                     else:
@@ -1021,7 +1019,6 @@ class CarlaDataProvider(object):  # pylint: disable=too-many-public-methods
         """
         Set the port to use for the traffic manager.
         """
-        seed = 0
         CarlaDataProvider._rng = random.RandomState(seed)
 
     @staticmethod

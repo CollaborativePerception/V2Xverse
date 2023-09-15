@@ -8,7 +8,251 @@ from collections import OrderedDict
 import re
 import yaml
 import math
+import copy
+from typing import List
 
+def check_numpy_to_torch(x):
+    if isinstance(x, np.ndarray):
+        return torch.from_numpy(x).float(), True
+    return x, False
+
+def get_yaw_angle(forward_vector):
+    forward_vector = forward_vector / np.linalg.norm(forward_vector)
+    yaw = math.acos(forward_vector[0])
+    if forward_vector[1] < 0:
+        yaw = 2 * np.pi - yaw
+    return yaw
+
+def boxes_to_corners_3d(boxes3d, order):
+    """
+        4 -------- 5
+       /|         /|
+      7 -------- 6 .
+      | |        | |
+      . 0 -------- 1
+      |/         |/
+      3 -------- 2
+    Parameters
+    __________
+    boxes3d: np.ndarray or torch.Tensor
+        (N, 7) [x, y, z, l, w, h, heading], or [x, y, z, h, w, l, heading]
+               (x, y, z) is the box center.
+    order : str
+        'lwh' or 'hwl'
+    Returns:
+        corners3d: np.ndarray or torch.Tensor
+        (N, 8, 3), the 8 corners of the bounding box.
+    opv2v's left hand coord 
+    
+    ^ z
+    |
+    |
+    | . x
+    |/
+    +-------> y
+    """
+
+    boxes3d, is_numpy = check_numpy_to_torch(boxes3d)
+    boxes3d_ = boxes3d
+
+    if order == 'hwl':
+        boxes3d_ = boxes3d[:, [0, 1, 2, 5, 4, 3, 6]]
+
+    template = boxes3d_.new_tensor((
+        [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, -1],
+        [1, -1, 1], [1, 1, 1], [-1, 1, 1], [-1, -1, 1],
+    )) / 2
+
+    corners3d = boxes3d_[:, None, 3:6].repeat(1, 8, 1) * template[None, :, :]
+    corners3d = rotate_points_along_z(corners3d.view(-1, 8, 3),
+                                                   boxes3d_[:, 6]).view(-1, 8,
+                                                                        3)
+    corners3d += boxes3d_[:, None, 0:3]
+
+    return corners3d.numpy() if is_numpy else corners3d
+
+def get_points_in_rotated_box_3d(p, box_corner):
+    """
+    Get points within a rotated bounding box (3D version).
+
+    Parameters
+    ----------
+    p : numpy.array
+        Points to be tested with shape (N, 3).
+    box_corner : numpy.array
+        Corners of bounding box with shape (8, 3).
+
+            0 --------------------- 1         
+          ,"|                     ,"|       
+         3 --------------------- 2  |     
+         |  |                    |  |   
+         |  |                    |  |  
+         |  4  _ _ _ _ _ _ _ _ _ |  5 
+         |,"                     |," 
+         7 --------------------- 6
+
+    Returns
+    -------
+    p_in_box : numpy.array
+        Points within the box.
+
+    """
+    edge1 = box_corner[1, :] - box_corner[0, :]
+    edge2 = box_corner[3, :] - box_corner[0, :]
+    edge3 = box_corner[4, :] - box_corner[0, :]
+
+    p_rel = p - box_corner[0, :].reshape(1, -1)
+
+    l1 = get_projection_length_for_vector_projection(p_rel, edge1)
+    l2 = get_projection_length_for_vector_projection(p_rel, edge2)
+    l3 = get_projection_length_for_vector_projection(p_rel, edge3)
+    # A point is within the box, if and only after projecting the
+    # point onto the two edges s.t. p_rel = [edge1, edge2] @ [l1, l2]^T,
+    # we have 0<=l1<=1 and 0<=l2<=1.
+    mask1 = np.logical_and(l1 >= 0, l1 <= 1)
+    mask2 = np.logical_and(l2 >= 0, l2 <= 1)
+    mask3 = np.logical_and(l3 >= 0, l3 <= 1)
+
+    mask = np.logical_and(mask1, mask2)
+    mask = np.logical_and(mask, mask3)
+    p_in_box = p[mask, :]
+
+    return p_in_box
+
+def get_projection_length_for_vector_projection(a, b):
+    """
+    Get projection length for the Vector projection of a onto b s.t.
+    a_projected = length * b. (2D version) See
+    https://en.wikipedia.org/wiki/Vector_projection#Vector_projection_2
+    for more details.
+
+    Parameters
+    ----------
+    a : numpy.array
+        The vectors to be projected with shape (N, 2).
+
+    b : numpy.array
+        The vector that is projected onto with shape (2).
+
+    Returns
+    -------
+    length : numpy.array
+        The length of projected a with respect to b.
+    """
+    assert np.sum(b ** 2, axis=-1) > 1e-6
+    length = a.dot(b) / np.sum(b ** 2, axis=-1)
+    return length
+
+def rotate_points_along_z(points, angle):
+    """
+    Args:
+        points: (B, N, 3 + C)
+        angle: (B), radians, angle along z-axis, angle increases x ==> y
+    Returns:
+    """
+    points, is_numpy = check_numpy_to_torch(points)
+    angle, _ = check_numpy_to_torch(angle)
+
+    cosa = torch.cos(angle)
+    sina = torch.sin(angle)
+    zeros = angle.new_zeros(points.shape[0])
+    ones = angle.new_ones(points.shape[0])
+    rot_matrix = torch.stack((
+        cosa, sina, zeros,
+        -sina, cosa, zeros,
+        zeros, zeros, ones
+    ), dim=1).view(-1, 3, 3).float()
+    points_rot = torch.matmul(points[:, :, 0:3].float(), rot_matrix)
+    points_rot = torch.cat((points_rot, points[:, :, 3:]), dim=-1)
+    return points_rot.numpy() if is_numpy else points_rot
+
+def process_lidar_visibility(actors_data: dict, lidar_np: np.array, lidar_pose: dict, change_actor_file: bool = False, mode: str = 'lidar', thresh: int = 5) -> (dict, List) : 
+    """
+    tag actors data with label of lidar visibility.
+    If there are enough lidar points within the detection box range of an actor, this actor is visible for lidar, vice versa
+    Args:
+        actors_data: bounding box of actors in world coordinate
+        lidar_np: point clouds in lidar coordinate
+        lidar_pose: lidar pose in world coordinate
+        change_actor_file: whether to rewrite the actor data
+        mode: 'lidar' or 'camera'
+        thresh: minimum number of lidar points to tell a box is visible
+    Returns:
+        actors_data: added with information fo lidar_visibility
+        visible_actor_ids: id of visible actors
+    """
+
+    original_actors_data = copy.deepcopy(actors_data)    
+    lidar_unprocessed = copy.deepcopy(lidar_np)
+    full_lidar = lidar_unprocessed[..., :3]
+    full_lidar[:, 1] *= -1
+
+    ego_x = lidar_pose["lidar_pose_x"]
+    ego_y = lidar_pose["lidar_pose_y"]
+    ego_z = lidar_pose["lidar_pose_z"]
+    ego_theta = lidar_pose["theta"] + np.pi
+
+    # transform matrix from lidar to world
+    R = np.array(
+        [
+            [np.cos(ego_theta), -np.sin(ego_theta)],
+            [np.sin(ego_theta), np.cos(ego_theta)],
+        ]
+    )
+
+    # transform actor bounding box from world coordinate to lidar coordinate
+    for _id in original_actors_data.keys():
+        if original_actors_data[_id]["tpe"] == 2:
+            continue  # FIXME donot add traffix light
+        raw_loc = original_actors_data[_id]['loc'][:2]
+        new_loc = R.T.dot(np.array([raw_loc[0] - ego_x , raw_loc[1] - ego_y]))
+        new_loc[1] = -new_loc[1]
+        original_actors_data[_id]['loc'][:2] = np.array(new_loc)
+        # if original_actors_data[_id]["tpe"] == 1:
+        #     original_actors_data[_id]['loc'][2] -= original_actors_data[_id]['box'][2]
+        original_actors_data[_id]['loc'][2] -= (ego_z)
+        raw_ori = original_actors_data[_id]['ori'][:2]
+        new_ori = R.T.dot(np.array([raw_ori[0], raw_ori[1]]))
+        original_actors_data[_id]['ori'][:2] = np.array(new_ori)
+    
+
+    boxes_corner = [] # pose and orientation of the box,
+            # (x, y, z, scale_x, scale_y, scale_z, yaw)
+    id_map = {}
+    count = 0
+    for _id in original_actors_data.keys():
+        if original_actors_data[_id]["tpe"] == 2:
+            continue  # FIXME donot add traffix light
+        cur_data = original_actors_data[_id]
+        yaw = get_yaw_angle(cur_data['ori'][:2])
+        cur_data['loc'][2] += cur_data['box'][2]
+        boxes_corner.append(cur_data['loc']+ [i*2 for i in cur_data['box']] + [yaw])
+        id_map[count] = _id
+        count += 1
+    boxes_corner = np.array(boxes_corner)   
+
+    # transform boxes to form of corner
+    corners = boxes_to_corners_3d(boxes_corner, order='lwh')
+
+    # check the number of lidar points in each box and tag the box
+    visible_actor_ids = []
+    for N in range(boxes_corner.shape[0]):
+        if actors_data[id_map[N]]['tpe']==2:
+            if change_actor_file:
+                actors_data[id_map[N]]['lidar_visible'] = 0
+                actors_data[id_map[N]]['camera_visible'] = 0
+            continue
+        num_lidar_points = get_points_in_rotated_box_3d(full_lidar, corners[N])
+        # print(len(num_lidar_points))
+        if len(num_lidar_points)> thresh :
+            if change_actor_file:
+                actors_data[id_map[N]]['{}_visible'.format(mode)] = 1
+            visible_actor_ids.append(id_map[N])
+        else:
+            if change_actor_file:
+                actors_data[id_map[N]]['{}_visible'.format(mode)] = 0
+
+    return actors_data, visible_actor_ids
 
 def convert_format(boxes_array):
     """
@@ -831,15 +1075,33 @@ def generate_bbox_multiclass(map_input,det_range,id=0,name='0'):
     plt.savefig('/dssg/home/acct-agrtkx/agrtkx/cxxu/results_cx/check_warp/'+str(id)+name+'.jpg',bbox_inches='tight', pad_inches = -0.1)
     return fig
 
-def get_pairwise_transformation(pose, max_cav):
-    pairwise_t_matrix = np.tile(np.eye(4), (max_cav, max_cav, 1, 1)) # (L, L, 4, 4)
+def get_pairwise_transformation(base_data_dict, max_cav, proj_first):
+    """
+    Get pair-wise transformation matrix accross different agents.
+
+    Parameters
+    ----------
+    base_data_dict : dict
+        Key : cav id, item: transformation matrix to ego, lidar points.
+
+    max_cav : int
+        The maximum number of cav, default 5
+
+    Return
+    ------
+    pairwise_t_matrix : np.array
+        The pairwise transformation matrix across each cav.
+        shape: (L, L, 4, 4), L is the max cav number in a scene
+        pairwise_t_matrix[i, j] is Tji, i_to_j
+    """
+    pairwise_t_matrix = np.tile(np.eye(4), (1, 1, 1)) # (L, L, 4, 4)
 
     t_list = []
 
     # save all transformation matrix in a list in order first.
-    for i in range(max_cav):
-        lidar_pose = pose[i]
-        t_list.append(self.x_to_world(lidar_pose))  # Twx
+    for cav_id, cav_content in base_data_dict.items():
+        lidar_pose = cav_content['params']['lidar_pose']
+        t_list.append(x_to_world(lidar_pose))  # Twx
 
     for i in range(len(t_list)):
         for j in range(len(t_list)):
@@ -851,6 +1113,72 @@ def get_pairwise_transformation(pose, max_cav):
                 pairwise_t_matrix[i, j] = t_matrix
 
     return pairwise_t_matrix
+
+def x_to_world(pose):
+    """
+    The transformation matrix from x-coordinate system to carla world system
+    Also is the pose in world coordinate: T_world_x
+
+    Parameters
+    ----------
+    pose : list
+        [x, y, z, roll, yaw, pitch], degree
+
+    Returns
+    -------
+    matrix : np.ndarray
+        The transformation matrix.
+    """
+    x, y, z, roll, yaw, pitch = pose[:]
+
+    # used for rotation matrix
+    c_y = np.cos(np.radians(yaw))
+    s_y = np.sin(np.radians(yaw))
+    c_r = np.cos(np.radians(roll))
+    s_r = np.sin(np.radians(roll))
+    c_p = np.cos(np.radians(pitch))
+    s_p = np.sin(np.radians(pitch))
+
+    matrix = np.identity(4)
+
+    # translation matrix
+    matrix[0, 3] = x
+    matrix[1, 3] = y
+    matrix[2, 3] = z
+
+    # rotation matrix
+    matrix[0, 0] = c_p * c_y
+    matrix[0, 1] = c_y * s_p * s_r - s_y * c_r
+    matrix[0, 2] = -c_y * s_p * c_r - s_y * s_r
+    matrix[1, 0] = s_y * c_p
+    matrix[1, 1] = s_y * s_p * s_r + c_y * c_r
+    matrix[1, 2] = -s_y * s_p * c_r + c_y * s_r
+    matrix[2, 0] = s_p
+    matrix[2, 1] = -c_p * s_r
+    matrix[2, 2] = c_p * c_r
+
+    return matrix
+
+# def get_pairwise_transformation(pose, max_cav):
+#     pairwise_t_matrix = np.tile(np.eye(4), (max_cav, max_cav, 1, 1)) # (L, L, 4, 4)
+
+#     t_list = []
+
+#     # save all transformation matrix in a list in order first.
+#     for i in range(max_cav):
+#         lidar_pose = pose[i]
+#         t_list.append(self.x_to_world(lidar_pose))  # Twx
+
+#     for i in range(len(t_list)):
+#         for j in range(len(t_list)):
+#             # identity matrix to self
+#             if i != j:
+#                 # i->j: TiPi=TjPj, Tj^(-1)TiPi = Pj
+#                 # t_matrix = np.dot(np.linalg.inv(t_list[j]), t_list[i])
+#                 t_matrix = np.linalg.solve(t_list[j], t_list[i])  # Tjw*Twi = Tji
+#                 pairwise_t_matrix[i, j] = t_matrix
+
+#     return pairwise_t_matrix
 
 def warp_affine_simple(src, M, dsize,
         mode='bilinear',

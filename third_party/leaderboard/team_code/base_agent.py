@@ -11,6 +11,18 @@ import carla
 import copy
 from leaderboard.autoagents import autonomous_agent
 from team_code.planner import RoutePlanner
+from carla_birdeye_view import BirdViewProducer, BirdViewCropType, PixelDimensions
+from eval_utils import get_yaw_angle, boxes_to_corners_3d, get_points_in_rotated_box_3d, process_lidar_visibility
+from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+
+from team_code.utils.map_drawing import \
+    cv2_subpixel, draw_agent, draw_road, \
+    draw_lane, road_exclude, draw_crosswalks, draw_city_objects
+
+from team_code.utils.map_utils import \
+    world_to_sensor, lateral_shift, list_loc2array, list_wpt2array, \
+    convert_tl_status, exclude_off_road_agents, retrieve_city_object_info, \
+    obj_in_range
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -42,6 +54,18 @@ WEATHERS = {
     "HardRainNight": carla.WeatherParameters(100.0,100.0,90.0,100.0,-1.0,-90.0,100.0,0.75,0.1,100.0),
 }
 WEATHERS_IDS = list(WEATHERS)
+
+TPE = {
+    carla.CityObjectLabel.Buildings: "Building", 
+    carla.CityObjectLabel.Vegetation: "Vegetation", 
+    carla.CityObjectLabel.Poles: "Poles",
+    carla.CityObjectLabel.Pedestrians: "Pedestrian",
+    carla.CityObjectLabel.TrafficSigns: "TrafficSign",
+    carla.CityObjectLabel.TrafficLight: "TrafficLight",
+    carla.CityObjectLabel.Static: "Static",
+    carla.CityObjectLabel.Fences: "Fence",
+    carla.CityObjectLabel.Walls: "Wall"
+}
 
 def get_camera_intrinsic(sensor):
     """
@@ -83,8 +107,32 @@ def get_camera_extrinsic(cur_extrin, ref_extrin):
 
 
 class BaseAgent(autonomous_agent.AutonomousAgent):
-    def setup(self, path_to_conf_file, ego_vehicles_num):
+    """
+    AutonomousAgent -> BaseAgent
+    This class mainly define:
+        the format and path for the data to be saved during data collection
+        sensor parameters
+        sensor data pre-process before saving
+    Args:
+        self.config: dict()
+        self.step: int, simulation step
+        self._rgb_sensor_data: dict(), rgb data parameters
+        self.weather_id: int, weather parameters
+        self.save_skip_frames: int (default: 4), simulation_frequency/data_saving_frequency
+        self.change_rsu_frame: int (default: 100), simulation_frequency/changing_rsu_position_frequency
+        self.ego_vehicles_num: int, numbers of communicating vehicles
+
+
+    """
+    def setup(self, path_to_conf_file: str, ego_vehicles_num: int):
+        """
+        Initialize everything needed by your agent and set the track attribute to the right type:
+            Track.SENSORS : CAMERAS, LIDAR, RADAR, GPS and IMU sensors are allowed
+            Track.MAP : OpenDRIVE map is also allowed
+        """
         self.track = autonomous_agent.Track.SENSORS
+
+        # load config file, default type for data collection: yaml
         if path_to_conf_file.endswith("yaml"):
             self.config = yaml.load(open(path_to_conf_file, "r"), Loader=yaml.FullLoader)
         else:
@@ -93,20 +141,18 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
         self.wall_start = time.time()
         self.initialized = False
 
+        # load key params related to sensor data saving
         self._rgb_sensor_data = {"width": 800, "height": 600, "fov": 100}
-        # self._sensor_data = {"width": 400, "height": 300, "fov": 100}
         self._sensor_data = self._rgb_sensor_data.copy()
-
         self._3d_bb_distance = 50
         self.weather_id = self.config.get("weather", None)
         self.waypoint_disturb = self.config.get("waypoint_disturb", 0)
         self.waypoint_disturb_seed = self.config.get("waypoint_disturb_seed", 2021)
-        self.destory_hazard_actors = self.config.get("destory_hazard_actors", True)
-        self.save_skip_frames = self.config.get("save_skip_frames", 10)
         self.rgb_only = self.config.get("rgb_only", True)
-
-        self.save_path = None
         self.ego_vehicles_num = ego_vehicles_num
+
+        # initialize and create data saving directory
+        self.save_path = None
         if SAVE_PATH is not None:
             now = datetime.datetime.now()
             string = pathlib.Path(os.environ["ROUTES"]).stem + "_"
@@ -126,7 +172,7 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                         (now.month, now.day, now.hour, now.minute, now.second),
                     )
                 )
-            print(string)
+            print('data saving path:',string)
             self.save_path = pathlib.Path(os.environ["SAVE_PATH"]) / string
             self.save_path.mkdir(parents=True, exist_ok=False)
 
@@ -142,10 +188,16 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                 (self.save_path_tmp / "actors_data").mkdir(parents=True, exist_ok=True)
                 (self.save_path_tmp / "env_actors_data").mkdir(parents=True, exist_ok=True)
                 (self.save_path_tmp / "lidar").mkdir(parents=True, exist_ok=True)
-                # (self.save_path_tmp / "topdown").mkdir(parents=True, exist_ok=True)
+                (self.save_path_tmp / "topdown").mkdir(parents=True, exist_ok=True)
                 (self.save_path_tmp / "birdview").mkdir(parents=True, exist_ok=True)
+                (self.save_path_tmp / "bev_visibility").mkdir(parents=True, exist_ok=True)
 
-                for pos in ["front", "left", "right"]:
+                for pos in ["front"]:
+                    for sensor_type in ["rgb", "seg", "depth", "2d_bbs", "lidar_semantic"]:
+                        name = sensor_type + "_" + pos
+                        (self.save_path_tmp / name).mkdir()
+
+                for pos in ["left", "right"]:
                     for sensor_type in ["rgb", "seg", "depth", "2d_bbs"]:
                         name = sensor_type + "_" + pos
                         (self.save_path_tmp / name).mkdir()
@@ -157,15 +209,19 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
 
     def _init(self):
 
+        # initialize route planner
         self._command_planner = RoutePlanner(7.5, 25.0, 257)
         self._command_planner.set_route(self._global_plan, True)
 
+        # agent only initialize once
         self.initialized = True
 
         self._sensor_data["calibration"] = self._get_camera_to_car_calibration(
             self._sensor_data
         )
         self._sensors = self.sensor_interface._sensors_objects
+        
+        # start from vehicle 0
         self.vehicle_num = 0
 
     def _get_position(self, tick_data, vehicle_num):
@@ -230,6 +286,16 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                 "height": self._sensor_data["height"],
                 "fov": self._sensor_data["fov"],
                 "id": "depth_front",
+            },
+            {
+                "type": "sensor.lidar.ray_cast_semantic",
+                "x": self.camera_front_pose.location.x,
+                "y": self.camera_front_pose.location.y,
+                "z": self.camera_front_pose.location.z,
+                "roll": self.camera_front_pose.rotation.roll,
+                "pitch": self.camera_front_pose.rotation.pitch,
+                "yaw": self.camera_front_pose.rotation.yaw,
+                "id": "lidar_semantic_front",
             },
             {
                 "type": "sensor.camera.rgb",
@@ -447,6 +513,7 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
         gps = input_data["gps_{}".format(self.vehicle_num)][1][:2]
         move_state = input_data["speed_{}".format(self.vehicle_num)][1]["move_state"]
         compass = input_data["imu_{}".format(self.vehicle_num)][1][-1]
+        imu = input_data["imu_{}".format(self.vehicle_num)][1][:]
 
         weather = self._weather_to_dict(self._world.get_weather())
 
@@ -477,9 +544,11 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                 "depth_right_{}".format(self.vehicle_num): depth_right,
                 "2d_bbs_right_{}".format(self.vehicle_num): bb_2d["right"],
                 "lidar_{}".format(self.vehicle_num): input_data["lidar_{}".format(self.vehicle_num)][1],
+                "lidar_semantic_front_{}".format(self.vehicle_num): input_data["lidar_semantic_front_{}".format(self.vehicle_num)][1],
                 "gps_{}".format(self.vehicle_num): gps,
                 "move_state_{}".format(self.vehicle_num): move_state,
                 "compass_{}".format(self.vehicle_num): compass,
+                "imu_{}".format(self.vehicle_num): imu,
                 "weather": weather,
                 "affordances_{}".format(self.vehicle_num): affordances,
                 "3d_bbs_{}".format(self.vehicle_num): bb_3d,
@@ -497,29 +566,46 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
         tick_data,
         mode='all'
     ):
-        frame = self.step # // self.save_skip_frames
-        # print(self.vehicle_num)
-        pos = self._get_position(tick_data, self.vehicle_num)
+        """
+        save sensor data
+        """
+        frame = self.step  // self.save_skip_frames
+
+        # save measurements of ego vehicle
+        ego_pos = self._get_position(tick_data, self.vehicle_num)
         theta = tick_data["compass_{}".format(self.vehicle_num)]
+        imu = {} 
+        imu['accelerometer_x'] = tick_data["imu_{}".format(self.vehicle_num)][0]
+        imu['accelerometer_y'] = tick_data["imu_{}".format(self.vehicle_num)][1]
+        imu['accelerometer_z'] = tick_data["imu_{}".format(self.vehicle_num)][2]
+        imu['gyroscope_x'] = tick_data["imu_{}".format(self.vehicle_num)][3]
+        imu['gyroscope_y'] = tick_data["imu_{}".format(self.vehicle_num)][4]
+        imu['gyroscope_z'] = tick_data["imu_{}".format(self.vehicle_num)][5]
+        imu['compass'] = tick_data["imu_{}".format(self.vehicle_num)][6]
         move_state = tick_data["move_state_{}".format(self.vehicle_num)]
         weather = tick_data["weather"]
         cur_lidar_pose = carla.Location(x=self.lidar_pose.location.x,
                                             y=self.lidar_pose.location.y,
                                             z=self.lidar_pose.location.z)
+        # transform pose from ego coordinate to world coordinate
         self._vehicle.get_transform().transform(cur_lidar_pose)
+        self.cur_camera_front_pose = carla.Location(x=self.camera_front_pose.location.x,
+                                            y=self.camera_front_pose.location.y,
+                                            z=self.camera_front_pose.location.z)        
+        self._vehicle.get_transform().transform(self.cur_camera_front_pose)
         if int(frame) == 0:
             self.intrinsics = get_camera_intrinsic(self._rgb_sensor_data)
             self.lidar2front = get_camera_extrinsic(self.camera_front_pose, self.lidar_pose)
             self.lidar2left = get_camera_extrinsic(self.camera_left_pose, self.lidar_pose)
             self.lidar2right = get_camera_extrinsic(self.camera_right_pose, self.lidar_pose)
             self.lidar2rear = get_camera_extrinsic(self.camera_rear_pose, self.lidar_pose)
-
         data = {
-            "gps_x": pos[0],
-            "gps_y": pos[1],
+            "gps_x": ego_pos[0],
+            "gps_y": ego_pos[1],
             "x": self._loc[0],
             "y": self._loc[1],
             "theta": theta,
+            "imu": imu,
             "lidar_pose_x": cur_lidar_pose.x,
             "lidar_pose_y": cur_lidar_pose.y,
             "lidar_pose_z": cur_lidar_pose.z,
@@ -567,21 +653,37 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
         json.dump(data, f, indent=4)
         f.close()
 
+        # other data
         if mode == 'all':
+            # collect actors data from carla world
+            self.actors_data = self.collect_actor_data()
+            lidar_pose = {"lidar_pose_x": data["lidar_pose_x"],
+                          "lidar_pose_y": data["lidar_pose_y"],
+                          "lidar_pose_z": data["lidar_pose_z"],
+                          "theta": data["theta"]}
+            # add lidar visibility information for actors data
+            self.actors_data, _ = process_lidar_visibility(self.actors_data, tick_data["lidar" + "_{}".format(self.vehicle_num)], lidar_pose, change_actor_file=True)
             actors_data_file = self.save_path_tmp / "actors_data" / ("%04d.json" % frame)
             f = open(actors_data_file, "w")
             json.dump(self.actors_data, f, indent=4)
             f.close()
 
+            # collect static environment actors
+            self.env_actors_data = self.collect_env_actor_data()
             actors_data_file = self.save_path_tmp / "env_actors_data" / ("%04d.json" % frame)
             f = open(actors_data_file, "w")
             json.dump(self.env_actors_data, f, indent=4)
             f.close()
 
+            # BEV map
+            self.birdview = BirdViewProducer.as_rgb(
+            self.birdview_producer.produce(agent_vehicle=self._vehicle )
+            )
             Image.fromarray(self.birdview).save(
                 self.save_path_tmp / "birdview" / ("%04d.jpg" % frame)
             )
 
+            # camera rgb, depth, segmentation, 2d bounding box
             for pos in ["front", "left", "right", "rear"]:
                 name = "rgb_" + pos + "_{}".format(self.vehicle_num)
                 name_save = "rgb_" + pos
@@ -589,25 +691,25 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                     self.save_path_tmp / name_save / ("%04d.jpg" % frame)
                 )
                 if not self.rgb_only and pos != "rear":
-                    for sensor_type in ["depth"]:  # "seg", 
+                    for sensor_type in ["depth", "seg"]:  # , 
                         name = sensor_type + "_" + pos + "_{}".format(self.vehicle_num)
                         name_save = sensor_type + "_" + pos
                         Image.fromarray(tick_data[name]).save(
                             self.save_path_tmp / name_save / ("%04d.jpg" % frame)
                         )
-                    # for sensor_type in ["2d_bbs"]:
-                    #     name = sensor_type + "_" + pos + "_{}".format(self.vehicle_num)
-                    #     name_save = sensor_type + "_" + pos
-                        # np.save(
-                        #     self.save_path_tmp / name_save / ("%04d.npy" % frame),
-                        #     tick_data[name],
-                        #     allow_pickle=True,
-                        # )
+                    for sensor_type in ["2d_bbs"]:
+                        name = sensor_type + "_" + pos + "_{}".format(self.vehicle_num)
+                        name_save = sensor_type + "_" + pos
+                        np.save(
+                            self.save_path_tmp / name_save / ("%04d.npy" % frame),
+                            tick_data[name],
+                            allow_pickle=True,
+                        )
 
             if not self.rgb_only:
-                # Image.fromarray(tick_data["topdown" + "_{}".format(self.vehicle_num)]).save(
-                #     self.save_path_tmp / "topdown" / ("%04d.jpg" % frame)
-                # )
+                Image.fromarray(tick_data["topdown" + "_{}".format(self.vehicle_num)]).save(
+                    self.save_path_tmp / "topdown" / ("%04d.jpg" % frame)
+                )
                 np.save(
                     self.save_path_tmp / "affordances" / ("%04d.npy" % frame),
                     tick_data["affordances" + "_{}".format(self.vehicle_num)],
@@ -619,11 +721,294 @@ class BaseAgent(autonomous_agent.AutonomousAgent):
                     allow_pickle=True,
                 )
                 np.save(
+                    self.save_path_tmp / "lidar_semantic_front" / ("%04d.npy" % frame),
+                    tick_data["lidar_semantic_front" + "_{}".format(self.vehicle_num)],
+                    allow_pickle=True,
+                )
+
+                # bev_visiblity for camera detection
+                bev_map = self.sg_lidar_2_bevmap(tick_data)
+                save_visibility_name = os.path.join(self.save_path_tmp,
+                                                    'bev_visibility',
+                                                    "%04d.png" % frame)
+                cv2.imwrite(save_visibility_name, bev_map)
+
+                # 3d bounding box
+                np.save(
                     self.save_path_tmp / "3d_bbs" / ("%04d.npy" % frame),
                     tick_data["3d_bbs" + "_{}".format(self.vehicle_num)],
                     allow_pickle=True,
                 )
         return frame
+
+    def collect_actor_data(self):
+        """
+        collect actors data from carla world within a radius of 100 meters, 
+        including car for type 0, walker for type 1, traffic light for type 2, bicycle for type 3
+        """
+        data = {}
+        vehicles = self._world.get_actors().filter("*vehicle*")
+        for actor in vehicles:
+            loc = actor.get_location()
+            if loc.distance(self._vehicle.get_location()) > 100:
+                continue
+            _id = actor.id
+            data[_id] = {}
+            data[_id]["loc"] = [loc.x, loc.y, loc.z]
+            ori = actor.get_transform().rotation.get_forward_vector()
+            data[_id]["ori"] = [ori.x, ori.y, ori.z]
+            box = actor.bounding_box.extent
+            data[_id]["box"] = [box.x, box.y, box.z]
+            vel = actor.get_velocity()
+            data[_id]["vel"] = [vel.x, vel.y, vel.z]
+            angle = actor.get_transform().rotation
+            data[_id]["angle"] = [angle.roll, angle.yaw, angle.pitch]
+            if actor.type_id=="vehicle.diamondback.century":
+                data[_id]["tpe"] = 3
+            else:
+                data[_id]["tpe"] = 0
+
+        walkers = self._world.get_actors().filter("*walker.*")
+        for actor in walkers:
+            loc = actor.get_location()
+            if loc.distance(self._vehicle.get_location()) > 100:
+                continue
+            _id = actor.id
+            data[_id] = {}
+            data[_id]["loc"] = [loc.x, loc.y, loc.z]
+            ori = actor.get_transform().rotation.get_forward_vector()
+            data[_id]["ori"] = [ori.x, ori.y, ori.z]
+            box = actor.bounding_box.extent
+            data[_id]["box"] = [box.x, box.y, box.z]
+            vel = actor.get_velocity()
+            data[_id]["vel"] = [vel.x, vel.y, vel.z]
+            angle = actor.get_transform().rotation
+            data[_id]["angle"] = [angle.roll, angle.yaw, angle.pitch]
+            data[_id]["tpe"] = 1
+
+            # walker's location is at the center of bounding box, not like other actors' location at the bottom,
+            # therefore transform the location from the center to the bottom
+            data[_id]["loc"][2] -= data[_id]["box"][2]
+
+        lights = self._world.get_actors().filter("*traffic_light*")
+        for actor in lights:
+            loc = actor.get_location()
+            if loc.distance(self._vehicle.get_location()) > 100:
+                continue
+            _id = actor.id
+            data[_id] = {}
+            data[_id]["loc"] = [loc.x, loc.y, loc.z]
+            ori = actor.get_transform().rotation.get_forward_vector()
+            data[_id]["ori"] = [ori.x, ori.y, ori.z]
+            vel = actor.get_velocity()
+            data[_id]["sta"] = int(actor.state)
+            data[_id]["tpe"] = 2
+
+            trigger = actor.trigger_volume
+            box = trigger.extent
+            loc = trigger.location
+            ori = trigger.rotation.get_forward_vector()
+            data[_id]["taigger_loc"] = [loc.x, loc.y, loc.z]
+            data[_id]["trigger_ori"] = [ori.x, ori.y, ori.z]
+            data[_id]["trigger_box"] = [box.x, box.y, box.z]
+        return data
+    
+    def collect_env_actor_data(self):
+        """
+        collect static environment actors data from carla world within a radius of 100 meters
+        """
+        data = {}
+        _id = 0
+        for actor_type in list(TPE.keys()):
+            actors = CarlaDataProvider.get_world().get_level_bbs(actor_type=actor_type)
+            for actor in actors:
+                loc = actor.location
+                if loc.distance(self._vehicle.get_location()) > 100:
+                    continue
+                _id += 1
+                data[_id] = {}
+                data[_id]["loc"] = [loc.x, loc.y, loc.z]
+                ori = actor.rotation.get_forward_vector()
+                data[_id]["ori"] = [ori.x, ori.y, ori.z]
+                box = actor.extent
+                data[_id]["box"] = [box.x, box.y, box.z]
+                data[_id]["tpe"] = TPE[actor_type]
+        return data
+
+    def sg_lidar_2_bevmap(self, tick_data):
+        config = {'thresh':5,
+                  'radius_meter':50,
+                  'raster_size':[256, 256]
+                  }
+
+        # data = np.frombuffer(semantic_lidar, dtype=np.dtype([
+        #     ('x', np.float32), ('y', np.float32), ('z', np.float32),
+        #     ('CosAngle', np.float32), ('ObjIdx', np.uint32),
+        #     ('ObjTag', np.uint32)]))
+
+        # # (x, y, z, intensity)
+        # points = np.array([data['x'], data['y'], data['z']]).T
+        # obj_tag = np.array(data['ObjTag'])
+        # obj_idx = np.array(data['ObjIdx'])
+        # thresh = config['thresh']
+        # # self.data = data
+        # # self.frame = event.frame
+        # # self.timestamp = event.timestamp
+
+        # while obj_idx is None or obj_tag is None or \
+        #         obj_idx.shape[0] != obj_tag.shape[0]:
+        #     continue
+
+        # # label 10 is the vehicle
+        # vehicle_idx = obj_idx[obj_tag == 10]
+        # # each individual instance id
+        # vehicle_unique_id = list(np.unique(vehicle_idx))
+        # vehicle_id_filter = []
+
+        # for veh_id in vehicle_unique_id:
+        #     if vehicle_idx[vehicle_idx == veh_id].shape[0] > thresh:
+        #         vehicle_id_filter.append(veh_id)
+
+
+        lidar_pose = {"lidar_pose_x": self.cur_camera_front_pose.x,
+                        "lidar_pose_y": self.cur_camera_front_pose.y,
+                        "lidar_pose_z": self.cur_camera_front_pose.z,
+                        "theta": (self.camera_front_pose.rotation.yaw + 90)/180 * np.pi + tick_data["compass_{}".format(self.vehicle_num)]}
+        _, vehicle_id_filter = process_lidar_visibility(self.actors_data, tick_data["lidar_semantic_front" + "_{}".format(self.vehicle_num)], lidar_pose, change_actor_file=True, mode='camera', thresh = 5)
+
+
+        self.radius_meter = config['radius_meter']
+        self.raster_size = np.array(config['raster_size'])
+
+        self.pixels_per_meter = self.raster_size[0] / (self.radius_meter * 2)
+
+        meter_per_pixel = 1 / self.pixels_per_meter
+        raster_radius = \
+            float(np.linalg.norm(self.raster_size *
+                                 np.array([meter_per_pixel,
+                                           meter_per_pixel]))) / 2
+        dynamic_agents = self.load_agents_world(raster_radius)
+        final_agents = dynamic_agents
+
+        # final_agents = agents_in_range(raster_radius,
+        #                                     dynamic_agents)
+        
+        corner_list = []
+        for agent_id, agent in final_agents.items():
+            # in case we don't want to draw the cav itself
+            if agent_id == self._vehicle.id:
+                continue
+            if False: # not agent_id in vehicle_id_filter:
+                continue
+            agent_corner = self.generate_agent_area(agent['corners'])
+            corner_list.append(agent_corner)
+
+        self.vis_mask = 255 * np.zeros(
+            shape=(self.raster_size[1], self.raster_size[0], 3),
+            dtype=np.uint8)
+
+        self.vis_mask = draw_agent(corner_list, self.vis_mask)
+
+        return self.vis_mask
+
+    def load_agents_world(self, max_distance=50):
+        """
+        Load all the dynamic agents info from server directly
+        into a  dictionary.
+
+        Returns
+        -------
+        The dictionary contains all agents info in the carla world.
+        """
+
+        vehicle_list = self._world.get_actors().filter('vehicle.*')
+        walker_list = self._world.get_actors().filter("*walker.*")
+        
+        dynamic_agent_info = {}
+
+        def read_actors_corner(agent_list, agent_info):
+            for agent in agent_list:
+                loc = agent.get_location()
+                if loc.distance(self._vehicle.get_location()) > max_distance:
+                    continue
+
+                agent_id = agent.id
+
+                agent_transform = agent.get_transform()
+
+                type_id = agent.type_id
+                if not 'walker' in type_id:
+                    agent_loc = [agent_transform.location.x,
+                                agent_transform.location.y,
+                                agent_transform.location.z - agent.bounding_box.extent.z, ]
+                else:
+                    agent_loc = [agent_transform.location.x,
+                                agent_transform.location.y,
+                                agent_transform.location.z, ]                
+
+                agent_yaw = agent_transform.rotation.yaw
+
+                # calculate 4 corners
+                bb = agent.bounding_box.extent
+                corners = [
+                    carla.Location(x=-bb.x, y=-bb.y),
+                    carla.Location(x=-bb.x, y=bb.y),
+                    carla.Location(x=bb.x, y=bb.y),
+                    carla.Location(x=bb.x, y=-bb.y)
+                ]
+                # corners are originally in ego coordinate frame, convert to
+                # world coordinate
+                agent_transform.transform(corners)
+                corners_reformat = [[x.x, x.y, x.z] for x in corners]
+
+                agent_info[agent_id] = {'location': agent_loc,
+                                                'yaw': agent_yaw,
+                                                'corners': corners_reformat}
+            return agent_info
+
+        dynamic_agent_info = read_actors_corner(vehicle_list, dynamic_agent_info)
+        dynamic_agent_info = read_actors_corner(walker_list, dynamic_agent_info)            
+
+        return dynamic_agent_info
+    
+    def generate_agent_area(self, corners):
+        """
+        Convert the agent's bbx corners from world coordinates to
+        rasterization coordinates.
+
+        Parameters
+        ----------
+        corners : list
+            The four corners of the agent's bbx under world coordinate.
+
+        Returns
+        -------
+        agent four corners in image.
+        """
+        # (4, 3) numpy array
+        corners = np.array(corners)
+        # for homogeneous transformation
+        corners = corners.T
+        corners = np.r_[
+            corners, [np.ones(corners.shape[1])]]
+        # convert to ego's coordinate frame
+        corners = world_to_sensor(corners, self._vehicle.get_transform()).T
+        corners = corners[:, :2]
+
+        # switch x and y
+        corners = corners[..., ::-1]
+        # y revert
+        corners[:, 1] = -corners[:, 1]
+
+        corners[:, 0] = corners[:, 0] * self.pixels_per_meter + \
+                        self.raster_size[0] // 2
+        corners[:, 1] = corners[:, 1] * self.pixels_per_meter + \
+                        self.raster_size[1] // 2
+
+        # to make more precise polygon
+        corner_area = cv2_subpixel(corners[:, :2])
+
+        return corner_area
 
     def _weather_to_dict(self, carla_weather):
         weather = {

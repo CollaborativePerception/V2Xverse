@@ -30,23 +30,9 @@ import torch
 import time
 import json
 import yaml
-# sys.path.append("/GPFS/data/gjliu/Auto-driving/Cop3/scenario_runner")
-# sys.path.append("/GPFS/data/gjliu/Auto-driving/Cop3/leaderboard")
-# sys.path.append('/GPFS/data/gjliu/Auto-driving/Cop3/carla/PythonAPI/carla')
+import numpy as np
+import random
 
-# os.environ["CARLA_ROOT"] = '/GPFS/data/gjliu/Auto-driving/Cop3/carla'
-# os.environ["DATA_ROOT"] = 'dataset_cop3'
-# os.environ["YAML_ROOT"] = 'data_collection/yamls'
-# os.environ["ROUTES"]='leaderboard/data/training_routes/cop3_train_routes/routes_town02_long_1.xml'
-# os.environ["LEADERBOARD_ROOT"]='leaderboard'
-# os.environ["CHALLENGE_TRACK_CODENAME"]='SENSORS'
-# os.environ["PORT"]=2000 # same as the carla server port
-
-# os.environ["TEAM_AGENT"]='leaderboard/team_code/auto_pilot.py'
-# os.environ["TEAM_CONFIG"]='data_collection/yamls/weather-0.yaml'
-# os.environ["CHECKPOINT_ENDPOINT"]='/GPFS/data/gjliu/Auto-driving/Cop3/dataset_cop3/weather-0/results/routes_town02_0.json'
-# os.environ["SCENARIOS"]='leaderboard/data/scenarios/town02_all_scenarios.json'
-# os.environ["SAVE_PATH"]='/GPFS/data/gjliu/Auto-driving/Cop3/dataset_cop3/weather-0/data'
 from srunner.scenariomanager.carla_data_provider import *
 from srunner.scenariomanager.timer import GameTime
 from srunner.scenariomanager.watchdog import Watchdog
@@ -262,6 +248,11 @@ class LeaderboardEvaluator(object):
         CarlaDataProvider.set_traffic_manager_port(int(args.trafficManagerPort))
         CarlaDataProvider.set_random_seed(int(args.carlaProviderSeed))
 
+        np.random.seed(int(args.carlaProviderSeed))
+        random.seed(int(args.carlaProviderSeed))
+        torch.manual_seed(int(args.carlaProviderSeed))
+        torch.cuda.manual_seed_all(int(args.carlaProviderSeed))
+
         self.traffic_manager.set_synchronous_mode(True)
         self.traffic_manager.set_random_device_seed(int(args.trafficManagerSeed))
 
@@ -306,6 +297,11 @@ class LeaderboardEvaluator(object):
 
         Depending on what code fails, the simulation will either stop the route and
         continue from the next one, or report a crash and stop.
+
+        Args:
+            args: argparse.Namespace, global config
+            config: srunner.scenarioconfigs.route_scenario_configuration.RouteScenarioConfiguration, config for route scenarios
+
         """
         crash_message = ""
         entry_status = "Started"
@@ -317,57 +313,61 @@ class LeaderboardEvaluator(object):
         for j in range(self.ego_vehicles_num):
             self.statistics_manager[j].set_route(config.name, config.index)
 
-        # Set up the user's agent, and the timer to avoid freezing the simulation
+        # Set up the user's agent, and the timer self._agent_watchdog to avoid freezing the simulation
         try:
             self._agent_watchdog.start()
-            agent_class_name = getattr(self.module_agent, 'get_entry_point')()  # 'AutoPilot', 'CoP3BaselineAgent'
-            log_dir = None
-            self.agent_instance = getattr(self.module_agent, agent_class_name)(args.agent_config, self.ego_vehicles_num)
+            # agent_class_name for example 'AutoPilot', 'PnP_Agent' .etc
+            agent_class_name = getattr(self.module_agent, 'get_entry_point')()
+            self.agent_instance = getattr(self.module_agent, agent_class_name)(args.agent_config, 
+                                                                               self.ego_vehicles_num)
             config.agent = self.agent_instance
             if hasattr(self.agent_instance, "get_save_path"):
                 print("Data Generation Confirmed!")
                 config.save_path_root = self.agent_instance.get_save_path()
-                log_dir = os.path.join(config.save_path_root,'log')
-                self.log_dir = log_dir
-                if not os.path.exists(log_dir):
-                    os.mkdir(log_dir)
-                log_file_dir = os.path.join(log_dir,'log.log')
-                self.log_file_dir = log_file_dir
-                sys.stdout = Logger(log_file_dir)
-                args_file_dir = os.path.join(log_dir,'args.json')
-                args_dict = vars(args)
-                json_str = json.dumps(args_dict, indent=2)
-                with open(args_file_dir, 'w') as json_file:
-                    json_file.write(json_str)
-                print("{} (repetition {}) Log file initialized!".format(config.name, config.repetition_index))
+                log_root_dir = config.save_path_root
             else:
                 print("Evaluation Process!")
                 config.save_path_root = None
+                log_root_dir = os.path.dirname(os.environ["CHECKPOINT_ENDPOINT"])
+                try:
+                    log_root_dir = self.agent_instance.get_save_path()
+                except:
+                    print('load save path failed')
+
+            # Log simulation information(or error), every printed string will be logged in file log.log
+            log_dir = None
+            log_dir = os.path.join(log_root_dir,'log')
+            self.log_dir = log_dir
+            if not os.path.exists(log_dir):
+                os.mkdir(log_dir)
+            log_file_dir = os.path.join(log_dir,'log.log')
+            self.log_file_dir = log_file_dir
+            sys.stdout = Logger(log_file_dir)
+            args_file_dir = os.path.join(log_dir,'args.json')
+            args_dict = vars(args)
+            json_str = json.dumps(args_dict, indent=2)
+            with open(args_file_dir, 'w') as json_file:
+                json_file.write(json_str)
+            print("{} (repetition {}) Log file initialized!".format(config.name, config.repetition_index))
 
             # Check and store the sensors
             if not self.sensors:
                 self.sensors = self.agent_instance.sensors()
                 track = self.agent_instance.track
-
                 AgentWrapper.validate_sensor_configuration(self.sensors, track, args.track)
-
                 self.sensor_icons = [sensors_to_icons[sensor['type']] for sensor in self.sensors]
-                # 111
                 for j in range(self.ego_vehicles_num):
                     self.statistics_manager[j].save_sensors(self.sensor_icons, args.checkpoint)
-            
             self._agent_watchdog.stop()
-        # the number of the ego cars = ego_num  route = list()
+
         except SensorConfigurationInvalid as e:
             # The sensors are invalid -> set the ejecution to rejected and stop
             print("\n\033[91mThe sensor's configuration used is invalid:")
             print("> {}\033[0m\n".format(e))
             traceback.print_exc()
             traceback.print_exc(file=open(log_file_dir,'a'))
-
             crash_message = "Agent's sensors were invalid"
             entry_status = "Rejected"
-
             # self._register_statistics(config, args.ego_num, args.checkpoint, entry_status, crash_message)
             self._cleanup()
             sys.exit(-1)
@@ -378,17 +378,15 @@ class LeaderboardEvaluator(object):
             print("> {}\033[0m\n".format(e))
             traceback.print_exc()
             traceback.print_exc(file=open(log_file_dir,'a'))
-
             crash_message = "Agent couldn't be set up"
-
             # self._register_statistics(config,  args.ego_num, args.checkpoint, entry_status, crash_message)
             self._cleanup()
             return
 
-        print("\033[1m> Loading the world\033[0m")
-
         # Load the world and the scenario
+        print("\033[1m> Loading the world\033[0m")    
         try:
+            # create world
             self._load_and_wait_for_world(args, config.town, config.ego_vehicles)
             if args.crazy_level != 0:
                 # crazy traffic light
@@ -402,12 +400,8 @@ class LeaderboardEvaluator(object):
             # print(args.scenario_parameter)
             scenario = RouteScenario(world=self.world, config=config, debug_mode=args.debug, \
                     ego_vehicles_num=self.ego_vehicles_num, crazy_level=args.crazy_level, \
-                    crazy_propotion=args.crazy_propotion, log_dir=log_dir,scenario_parameter=scenario_parameter)
+                    crazy_proportion=args.crazy_proportion, log_dir=log_dir,scenario_parameter=scenario_parameter)
             config.trajectory=scenario.get_new_config_trajectory()
-            # print("\n\n")
-            # print(config.trajectory)
-            # print("\n\n")
-            # TODO: may be incorrect!!!
             if self.ego_vehicles_num != 1 :
                 for j in range(self.ego_vehicles_num):
                     self.statistics_manager[j].set_scenario(scenario.scenario[j])
@@ -423,7 +417,7 @@ class LeaderboardEvaluator(object):
                 for vehicle in scenario.ego_vehicles:
                     vehicle.set_light_state(carla.VehicleLightState(self._vehicle_lights))
 
-            # Load scenario and run it
+            # Load scenario and agent into manager then prepare to run it
             if args.record:
                 self.client.start_recorder("{}/{}_rep{}.log".format(args.record, config.name, config.repetition_index))
             self.manager.load_scenario(scenario, self.agent_instance, config.repetition_index, self.ego_vehicles_num, save_root=config.save_path_root, sensor_tf_list=scenario.get_sensor_tf(), is_crazy=(args.crazy_level != 0))
@@ -501,22 +495,18 @@ class LeaderboardEvaluator(object):
         # if crash_message == "Simulation crashed":
         #     sys.exit(-1)
 
-    def run(self, args):
+    def run(self, args: argparse.Namespace):
         """
         Run the challenge mode
         """
-        # agent_class_name = getattr(self.module_agent, 'get_entry_point')()
-        # self.agent_instance = getattr(self.module_agent, agent_class_name)(args.agent_config)
 
         route_indexer = RouteIndexer(args.routes, args.scenarios, args.repetitions)
 
         if args.resume:
             route_indexer.resume(args.checkpoint)
-            # 111
             for i in range(self.ego_vehicles_num):
                 self.statistics_manager[i].resume(args.checkpoint)
         else:
-            # 111
             for i in range(self.ego_vehicles_num):              
                 self.statistics_manager[i].clear_record(args.checkpoint)
             route_indexer.save_state(args.checkpoint)
@@ -524,18 +514,12 @@ class LeaderboardEvaluator(object):
         print("Start Running!")
         while route_indexer.peek():
             try:
-                # setup
+                # setup, load config of the next route
                 config = route_indexer.next()
 
                 # run
                 self._load_and_run_scenario(args, config)
 
-                # for obj in gc.get_objects():
-                #     try:
-                #         if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-                #             print(type(obj), obj.size())
-                #     except:
-                #         pass
                 for i in range(args.ego_num):
                     folder_path = os.path.join(os.path.dirname(args.checkpoint), "ego_vehicle_{}".format(i))
                     if not os.path.exists(folder_path):
@@ -568,7 +552,7 @@ def main():
     parser = argparse.ArgumentParser(description=description, formatter_class=RawTextHelpFormatter)
     parser.add_argument('--host', default='localhost',
                         help='IP of the host server (default: localhost)')
-    parser.add_argument('--port', default='2700', help='TCP port to listen to (default: 2000)')
+    parser.add_argument('--port', default='40000', help='TCP port to listen to (default: 2000)')
     parser.add_argument('--trafficManagerPort', default='2702',
                         help='Port to use for the TrafficManager (default: 8000)')
     parser.add_argument('--trafficManagerSeed', default='1',
@@ -583,13 +567,13 @@ def main():
 
     # simulation setup
     parser.add_argument('--routes',
-                        default='leaderboard/data/training_routes/cop3_train_routes/routes_town02_long_1.xml',
+                        default='third_party/leaderboard/data/evaluation_routes/final/town05_short_r0.xml',
                         help='Name of the route to be executed. Point to the route_xml_file to be executed.')
     parser.add_argument('--scenarios',
-                        default='leaderboard/data/scenarios/town02_all_scenarios.json',
+                        default='third_party/leaderboard/data/scenarios/town05_all_scenarios.json',
                         help='Name of the scenario annotation file to be mixed with the route.')
     parser.add_argument('--scenario_parameter', 
-                        default='leaderboard/scenarios/scenario_para.yaml',
+                        default='third_party/leaderboard/scenarios/scenario_para.yaml',
                         help='Defination of the scenario parameters.')
     parser.add_argument('--repetitions',
                         type=int,
@@ -597,24 +581,30 @@ def main():
                         help='Number of repetitions per route.')
 
     # agent-related options
-    parser.add_argument("-a", "--agent", type=str, default='leaderboard/team_code/auto_pilot.py', help="Path to Agent's py file to evaluate")
-    parser.add_argument("--agent-config", type=str, default='data_collection/yamls/weather-0.yaml', help="Path to Agent's configuration file")
+    parser.add_argument("-a", "--agent", type=str, default='third_party/leaderboard/team_code/pnp_agent.py', help="Path to Agent's py file to evaluate")
+    parser.add_argument("--agent-config", type=str, default='third_party/leaderboard/team_code/pnp_config.py', help="Path to Agent's configuration file")
 
     parser.add_argument("--track", type=str, default='SENSORS', help="Participation track: SENSORS, MAP")
     parser.add_argument('--resume', type=int, default=0, help='Resume execution from last checkpoint?')
     parser.add_argument("--checkpoint", type=str,
-                        default='/GPFS/data/gjliu/Auto-driving/Cop3/dataset_cop3/weather-0/results/routes_town02_0.json',
+                        default='/GPFS/data/gjliu/Auto-driving/Cop3/results/eval/test/results.json',
                         help="Path to checkpoint used for saving statistics and resuming")
     parser.add_argument('--ego-num', type=int, default=1, help='The number of ego vehicles')
     # crazy level: 0-5, the probability of ignoring front car.
-    # crazy propotion: the probability of a car is crazy 
+    # crazy proportion: the probability of a car is crazy 
+    
     parser.add_argument('--crazy-level',type=int,  default=3, help='Level background vehicles driving obey rule')
-    parser.add_argument('--crazy-propotion', type=int, default=70, help='The number of background vehicles driving obey rule')
+    parser.add_argument('--crazy-proportion', type=int, default=70, help='The number of background vehicles driving obey rule')
     
                     
 
     arguments = parser.parse_args()
 
+    if not os.path.exists(os.environ["SAVE_PATH"]):
+        os.makedirs(os.environ["SAVE_PATH"])
+    if not os.path.exists(os.path.dirname(os.environ["CHECKPOINT_ENDPOINT"])):
+        os.makedirs(os.path.dirname(os.environ["CHECKPOINT_ENDPOINT"]))
+        
     statistics_manager_all = []
     for i in range(arguments.ego_num):
         statistics_manager = StatisticsManager(ego_car_id=i)

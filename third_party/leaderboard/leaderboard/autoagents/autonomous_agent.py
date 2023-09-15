@@ -32,7 +32,7 @@ class AutonomousAgent(object):
     Autonomous agent base class. All user agents have to be derived from this class
     """
 
-    def __init__(self, path_to_conf_file,ego_vehicles_num,max_speed=10):
+    def __init__(self, path_to_conf_file,ego_vehicles_num):
         self.rsu = []
         self.track = Track.SENSORS
         #  current global plans to reach a destination
@@ -43,7 +43,7 @@ class AutonomousAgent(object):
         self.sensor_interface = SensorInterface()
 
         # agent's initialization
-        self.setup(path_to_conf_file, ego_vehicles_num,max_speed)
+        self.setup(path_to_conf_file, ego_vehicles_num)
 
         self.wallclock_t0 = None
 
@@ -102,17 +102,19 @@ class AutonomousAgent(object):
         Execute the agent call, e.g. agent()
         Returns the next vehicle controls
         """
+
+        # Obtaining data from sensors
         input_data = self.sensor_interface.get_data() # gps, lidar, imu, rgb, speed
 
+        # 
         timestamp = GameTime.get_time()
-
         if not self.wallclock_t0:
             self.wallclock_t0 = GameTime.get_wallclocktime()
         wallclock = GameTime.get_wallclocktime()
         wallclock_diff = (wallclock - self.wallclock_t0).total_seconds()
-
         # print('======[Agent] Wallclock_time = {} / {} / Sim_time = {} / {}x'.format(wallclock, wallclock_diff, timestamp, timestamp/(wallclock_diff+0.001)))
 
+        # get control signal, function run_step should be rewritten in your customized agent
         control = self.run_step(input_data, timestamp)
         for i in range(len(control)):
             if control[i]:  
@@ -129,14 +131,16 @@ class AutonomousAgent(object):
         self._global_plan = []
         self._global_plan_world_coord_all = []
         self._global_plan_all = []
-        # print("------------global_plan_world_coord-------------")
-        # print(len(global_plan_world_coord))
-        # [print(len(global_plan_world_coord[j])) for j in range(len(global_plan_world_coord))]
+
+        distance = 50
+        if isinstance(self.config, dict):
+            if 'target_point_distance' in self.config:
+                distance = self.config['target_point_distance']
+        elif self.config.__module__ == 'MainModel':
+            if hasattr(self.config, 'target_point_distance'):
+                distance = self.config.target_point_distance
+
         for vehicle_id in range(vehicle_num):
-            if self.agent_name == 'AutoPilot' or self.agent_name == 'expert' :
-                distance = 50
-            else: #if self.agent_name == 'V2X_Agent':
-                distance = 10
             ds_ids = downsample_route(global_plan_world_coord[vehicle_id], distance)
             global_plan_world_coord_tmp = [(global_plan_world_coord[vehicle_id][x][0], global_plan_world_coord[vehicle_id][x][1]) for x in ds_ids]
             global_plan = [global_plan_gps[vehicle_id][x] for x in ds_ids]

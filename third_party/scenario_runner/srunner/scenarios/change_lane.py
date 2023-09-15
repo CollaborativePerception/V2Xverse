@@ -58,15 +58,25 @@ class ChangeLane(BasicScenario):
         self.timeout = timeout
         self._map = CarlaDataProvider.get_map()
         self._reference_waypoint = self._map.get_waypoint(config.trigger_points[0].location)
+        if scenario_parameter is None:
+            self._fast_vehicle_velocity = 70
+            self._slow_vehicle_velocity = 0
+            self._change_lane_velocity = 15
 
-        self._fast_vehicle_velocity = 70
-        self._slow_vehicle_velocity = 0
-        self._change_lane_velocity = 15
+            self._slow_vehicle_distance = 100
+            self._fast_vehicle_distance = 20
+            self._trigger_distance = 30
+            self._max_brake = 1
+        else:
+            self._fast_vehicle_velocity = scenario_parameter['fast_vehicle_velocity']
+            self._slow_vehicle_velocity = scenario_parameter['slow_vehicle_velocity']
+            self._change_lane_velocity = scenario_parameter['change_lane_velocity']
 
-        self._slow_vehicle_distance = 100
-        self._fast_vehicle_distance = 20
-        self._trigger_distance = 30
-        self._max_brake = 1
+            self._slow_vehicle_distance = scenario_parameter['slow_vehicle_distance']
+            self._fast_vehicle_distance = scenario_parameter['fast_vehicle_distance']
+            self._trigger_distance = scenario_parameter['trigger_distance']
+            self._max_brake = scenario_parameter['max_brake']
+
 
         self.direction = 'left'  # direction of lane change
         self.lane_check = 'true'  # check whether a lane change is possible
@@ -85,29 +95,53 @@ class ChangeLane(BasicScenario):
 
     def _initialize_actors(self, config):
 
-        # add actors from xml file
-        for actor in config.other_actors:
-            vehicle = CarlaDataProvider.request_new_actor(actor.model, actor.transform)
-            self.other_actors.append(vehicle)
-            vehicle.set_simulate_physics(enabled=False)
+        # # add actors from xml file
+        # for actor in config.other_actors:
+        #     vehicle = CarlaDataProvider.request_new_actor(actor.model, actor.transform)
+        #     self.other_actors.append(vehicle)
+        #     vehicle.set_simulate_physics(enabled=False)
 
-        # fast vehicle, tesla
+        # fast vehicle
         # transform visible
         fast_car_waypoint, _ = get_waypoint_in_distance(self._reference_waypoint, self._fast_vehicle_distance)
         self.fast_car_visible = carla.Transform(
             carla.Location(fast_car_waypoint.transform.location.x,
                            fast_car_waypoint.transform.location.y,
-                           fast_car_waypoint.transform.location.z + 1),
+                           fast_car_waypoint.transform.location.z + 2),
             fast_car_waypoint.transform.rotation)
 
-        # slow vehicle, vw
+        # slow vehicle
         # transform visible
         slow_car_waypoint, _ = get_waypoint_in_distance(self._reference_waypoint, self._slow_vehicle_distance)
         self.slow_car_visible = carla.Transform(
             carla.Location(slow_car_waypoint.transform.location.x,
                            slow_car_waypoint.transform.location.y,
-                           slow_car_waypoint.transform.location.z),
+                           slow_car_waypoint.transform.location.z + 2),
             slow_car_waypoint.transform.rotation)
+        
+        # add actor automatically
+        first_transform = carla.Transform(
+            carla.Location(self.fast_car_visible.location.x,
+                           self.fast_car_visible.location.y,
+                           self.fast_car_visible.location.z - 500),
+            self.fast_car_visible.rotation)
+
+        second_transform = carla.Transform(
+            carla.Location(self.slow_car_visible.location.x,
+                           self.slow_car_visible.location.y,
+                           self.slow_car_visible.location.z - 500),
+            self.slow_car_visible.rotation)
+
+        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.*', self.fast_car_visible)
+        first_vehicle.set_transform(first_transform)
+        self.other_actors.append(first_vehicle)
+        first_vehicle.set_simulate_physics(enabled=False)
+
+        second_vehicle = CarlaDataProvider.request_new_actor('vehicle.*', self.slow_car_visible)
+        self.other_actors.append(second_vehicle)
+        second_vehicle.set_transform(second_transform)
+        second_vehicle.set_simulate_physics(enabled=False)
+
 
     def _create_behavior(self):
 

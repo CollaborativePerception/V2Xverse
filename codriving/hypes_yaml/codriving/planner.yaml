@@ -7,7 +7,7 @@ data:
   training:
     dataset:
       type: "CarlaMVDatasetWithGTInput"
-      root: "./data"
+      root: "/GPFS/public/InterFuser/dataset_cop3_lidarmini"
       towns: [1, 2, 3, 4]
       weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
       input_frame: *INPUT_FRAME
@@ -24,7 +24,7 @@ data:
   validation:
     dataset:
       type: "CarlaMVDatasetWithGTInput"
-      root: "./data"
+      root: "/GPFS/public/InterFuser/dataset_cop3_lidarmini"
       towns: [7, 10]
       weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
       input_frame: *INPUT_FRAME

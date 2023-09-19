@@ -185,3 +185,17 @@ birdview_v2_cache
 
 # visualization
 visualization/results
+
+
+# tool function
+third_party/leaderboard/data/scenarios/split_all_scenarios_json.py
+utils_g/
+
+# experiment scenario trigger points
+third_party/leaderboard/data/scenarios/all_towns_traffic_scenarios.json
+third_party/leaderboard/data/scenarios/town01_all_scenarios_extra.json
+third_party/leaderboard/data/scenarios/town02_all_scenarios_extra.json
+third_party/leaderboard/data/scenarios/town03_all_scenarios_extra.json
+third_party/leaderboard/data/scenarios/town04_all_scenarios_extra.json
+third_party/leaderboard/data/scenarios/town05_all_scenarios_extra.json
+third_party/leaderboard/data/scenarios/town06_all_scenarios_extra.json

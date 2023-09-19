@@ -21,8 +21,9 @@ from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import TimeOut
 from srunner.scenariomanager.weather_sim import WeatherBehavior
 from srunner.scenariomanager.scenarioatomics.atomic_behaviors import UpdateAllActorControls
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class BasicScenario(object):
 
     """

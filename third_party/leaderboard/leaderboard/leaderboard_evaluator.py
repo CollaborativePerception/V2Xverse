@@ -402,8 +402,8 @@ class LeaderboardEvaluator(object):
             # create route scenario
             st = time.time()
             scenario = RouteScenario(world=self.world, config=config, debug_mode=args.debug, \
-                ego_vehicles_num=self.ego_vehicles_num, crazy_level=args.crazy_level, \
-                crazy_propotion=args.crazy_propotion, log_dir=log_dir, trigger_distance = args.trigger_distance)
+                ego_vehicles_num=self.ego_vehicles_num, crazy_level=args.crazy_level,\
+                      crazy_proportion=args.crazy_proportion, log_dir=log_dir, trigger_distance = args.trigger_distance)
             config.trajectory=scenario.get_new_config_trajectory()
             if self.ego_vehicles_num != 1 :
                 for j in range(self.ego_vehicles_num):
@@ -599,6 +599,13 @@ def main():
                         default='/GPFS/data/gjliu/Auto-driving/Cop3/results/eval/test/results.json',
                         help="Path to checkpoint used for saving statistics and resuming")
     parser.add_argument('--ego-num', type=int, default=1, help='The number of ego vehicles')
+    # crazy level: 0-5, the probability of ignoring front car.
+    # crazy proportion: the probability of a car is crazy 
+    parser.add_argument('--crazy-level',type=int,  default=3, help='Level background vehicles driving obey rule')
+    parser.add_argument('--crazy-proportion', type=int, default=70, help='The number of background vehicles driving obey rule')
+
+    parser.add_argument('--max-speed', type=int, default=10, help='Max speed.')
+    parser.add_argument('--trigger-distance', type=int, default=10, help='scenario3 trigger distance.')
 
     arguments = parser.parse_args()
 

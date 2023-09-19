@@ -49,5 +49,5 @@ python ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator.py \
 --trafficManagerSeed=${TRAFFIC_SEED} \
 --ego-num=${EGO_NUM} \
 --crazy-level=${CRAZY_LEVEL} \
---crazy-propotion=${CRAZY_PROPROTION} \
+--crazy-proportion=${CRAZY_PROPROTION} \
 --timeout 600

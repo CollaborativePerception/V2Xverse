@@ -11,8 +11,9 @@ Scenario spawning elements to make the town dynamic and interesting
 import carla
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenarios.basic_scenario import BasicScenario
+from . import ScenarioClassRegistry
 
-
+@ScenarioClassRegistry.register
 class BackgroundActivity(BasicScenario):
 
     """

@@ -240,7 +240,18 @@ class ScenarioManager(object):
             # destroy ego if it is not in RUNNING status or not alive
             stop_flag = 0
             for vehicle_num in range(self.ego_vehicles_num):
-                if self.scenario_tree[vehicle_num].status != py_trees.common.Status.RUNNING or not CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
+                if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num) is None:
+                    stop_flag += 1
+                    if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num):
+                        self._agent.del_ego_sensor(vehicle_num)
+                        self._agent.cleanup_single(vehicle_num)
+                        self._agent.cleanup_rsu(vehicle_num)
+                        print("destroy ego {}".format(vehicle_num))
+                        CarlaDataProvider.remove_actor_by_id(CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).id)
+                    if stop_flag == self.ego_vehicles_num:
+                        self._running = False
+                
+                elif self.scenario_tree[vehicle_num].status != py_trees.common.Status.RUNNING or not CarlaDataProvider.get_hero_actor(hero_id=vehicle_num).is_alive:
                     stop_flag += 1
                     if CarlaDataProvider.get_hero_actor(hero_id=vehicle_num):
                         self._agent.del_ego_sensor(vehicle_num)

@@ -113,14 +113,14 @@ def convert_json_to_transform(actor_dict):
                                                    z=float(actor_dict['z'])),
                            rotation=carla.Rotation(roll=0.0, pitch=0.0, yaw=float(actor_dict['yaw'])))
 
-# NOTE（GJH): Select the scenario according to the propotion of each scenario
+# NOTE（GJH): Select the scenario according to the proportion of each scenario
 def selScenario(scenario_config: dict) -> str:
     """
     
-    Select a scenario according to the propotion of each scenario
+    Select a scenario according to the proportion of each scenario
 
     Args:
-        scenario_config: a dict of scenario definition config containing propotion in this Scenario
+        scenario_config: a dict of scenario definition config containing proportion in this Scenario
 
     Returns:
         selected_scenario: a string of selected scenario
@@ -128,10 +128,10 @@ def selScenario(scenario_config: dict) -> str:
     """
     try:
         scenarios = list(scenario_config.keys())
-        scenario_propotion = []
+        scenario_proportion = []
         for scenario_name in scenarios:
-            scenario_propotion.append(scenario_config[scenario_name]["propotion"])
-        return np.random.choice(scenarios, 1, p=scenario_propotion).tolist()[0]
+            scenario_proportion.append(scenario_config[scenario_name]["proportion"])
+        return np.random.choice(scenarios, 1, p=scenario_proportion).tolist()[0]
     except Exception as e:
         print("Select Scenario Error: ", e, "Using the first scenario in the config file.")
         scenarios = list(scenario_config.keys())
@@ -210,7 +210,7 @@ class RouteScenario(BasicScenario):
 
     category = "RouteScenario"
 
-    def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1, crazy_level=0,crazy_propotion=0,log_dir=None, scenario_parameter=None,trigger_distance=10):
+    def __init__(self, world, config, debug_mode=0, criteria_enable=True, ego_vehicles_num=1, crazy_level=0,crazy_proportion=0,log_dir=None, scenario_parameter=None,trigger_distance=10):
         """
         Setup all relevant parameters and create scenarios along route
 
@@ -235,7 +235,7 @@ class RouteScenario(BasicScenario):
         self.ego_vehicles_num=ego_vehicles_num
         self.new_config_trajectory=None
         self.crazy_level = crazy_level
-        self.crazy_propotion = crazy_propotion
+        self.crazy_proportion = crazy_proportion
         self.trigger_distance = trigger_distance
         self.sensor_tf_num = 0
         self.sensor_tf_list = []
@@ -713,18 +713,22 @@ class RouteScenario(BasicScenario):
             # randomly select a scenario
             # if scenario3 in select list, select it with a probability, if not select randomly
             selected_scenario = None
-            for scenario in list_scenarios:
-                if scenario['name'] == 'Scenario3':
-                    if rgn.random()>0.0:
-                        selected_scenario = rgn.choice(list_scenarios)
-                    selected_scenario = scenario
-            if selected_scenario == None:
-                selected_scenario = rgn.choice(list_scenarios)
+            # for scenario in list_scenarios:
+            #     if scenario['name'] == 'Scenario3':
+            #         if rgn.random()>0.0:
+            #             selected_scenario = rgn.choice(list_scenarios)
+            #         selected_scenario = scenario
+            selected_scenario = rgn.choice(list_scenarios)
+            # if selected_scenario == None:
+            #     selected_scenario = rgn.choice(list_scenarios)
             # record number of each type of scenario along this route
             if not selected_scenario['name'] in self.route_scenario_dic:
                 self.route_scenario_dic[selected_scenario['name']] = 1
             else:
                 self.route_scenario_dic[selected_scenario['name']] += 1
+
+            # if selected_scenario['name'] != 'Scenario3':
+            #     print(selected_scenario['name'])
             return selected_scenario
 
         # The idea is to randomly sample a scenario per trigger position.
@@ -874,7 +878,6 @@ class RouteScenario(BasicScenario):
                                                                             'hero_{}'.format(j))
                 route_var_name = "ScenarioRouteNumber{}".format(scenario_number)
                 scenario_configuration.route_var_name = route_var_name
-                
                 scenario_instance = scenario_class(world, [ego_vehicles[j]], scenario_configuration,
                                                     criteria_enable=False, timeout=timeout, scenario_parameter=scenario_class_parameter)
                 
@@ -954,7 +957,7 @@ class RouteScenario(BasicScenario):
                                                                 random_location=True,
                                                                 rolename='background',
                                                                 crazy_level = 0,
-                                                                crazy_propotion = 0
+                                                                crazy_proportion = 0
                                                                 )
         new_actors_pedestrian = CarlaDataProvider.request_new_batch_actors('walker.pedestrian.*',
                                                                 amount_pedestrain,
@@ -963,7 +966,7 @@ class RouteScenario(BasicScenario):
                                                                 random_location=True,
                                                                 rolename='background',
                                                                 crazy_level = self.crazy_level,
-                                                                crazy_propotion = self.crazy_propotion
+                                                                crazy_proportion = self.crazy_proportion
                                                                 )
         new_actors_bicycle = CarlaDataProvider.request_new_batch_actors('vehicle.diamondback.century',
                                                                 amount_pedestrain,
@@ -972,7 +975,7 @@ class RouteScenario(BasicScenario):
                                                                 random_location=True,
                                                                 rolename='background',
                                                                 crazy_level = self.crazy_level,
-                                                                crazy_propotion = self.crazy_propotion
+                                                                crazy_proportion = self.crazy_proportion
                                                                 )
                                                                 
         # TODO: add other types of actors

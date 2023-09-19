@@ -215,12 +215,12 @@ class OppositeVehicleRunningRedLight(BasicScenario):
 
         max_velocity_criterion = MaxVelocityTest(
             self.ego_vehicles[0],
-            self.self._ego_max_velocity_allowed,
+            self._ego_max_velocity_allowed,
             optional=True)
         collision_criterion = CollisionTest(self.ego_vehicles[0])
         driven_distance_criterion = DrivenDistanceTest(
             self.ego_vehicles[0],
-            self.self._ego_expected_driven_distance)
+            self._ego_expected_driven_distance)
 
         criteria.append(max_velocity_criterion)
         criteria.append(collision_criterion)

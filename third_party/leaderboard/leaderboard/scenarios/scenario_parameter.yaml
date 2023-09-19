@@ -66,13 +66,13 @@ Scenario2:
 
 Scenario3: 
     StationaryObjectCrossing:
-        proportion: 0.3 # Proportion of the scenario in Scenario3
+        proportion: 0.4 # Proportion of the scenario in Scenario3
         ego_vehicle_distance_driven: 40 # Distance the ego vehicle should drive before the scenario ends
         other_actor_target_velocity: 15 # Target velocity of the other actor
         start_distance: 40 # Distance between the trigger point and the static object
 
     DynamicObjectCrossing:
-        proportion: 0.3 # Proportion of the scenario in Scenario3
+        proportion: 0.5 # Proportion of the scenario in Scenario3
         trigger_distance: 10 # Distance between the trigger point and the dynamic object
         ego_vehicle_distance_driven: 40 # Distance the ego vehicle should drive before the scenario ends
         other_actor_target_velocity: 3 # Target velocity of the other actor. (if velocity < 0, velocity = 3 + (0.4 * self._num_lane_changes))
@@ -84,7 +84,7 @@ Scenario3:
         number_of_attempts: 500 # Number of attempts to find a valid scenario
 
     ConstructionSetupCrossing:
-        proportion: 0.3 # Proportion of the scenario in Scenario3
+        proportion: 0.0 # Proportion of the scenario in Scenario3
         start_distance: 40 # Distance between the trigger point and the static object
 
     FreeRide:

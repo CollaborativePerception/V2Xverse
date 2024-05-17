@@ -1,0 +1,2 @@
+ckpt_path: third_party/leaderboard/team_code/TCP_model/new.ckpt
+target_point_distance: 50

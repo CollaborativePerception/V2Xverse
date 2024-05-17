@@ -1,0 +1,13 @@
+change_rsu_frame: 200
+destroy_hazard_actors: true
+max_speed: 6.5
+rgb_only: false
+rsu_distance: 25
+rsu_height: 7.5
+rsu_lane_side: right
+save_skip_frames: 1
+target_point_distance: 50
+use_rsu: true
+waypoint_disturb: 0.2
+waypoint_disturb_seed: 2020
+weather: 12

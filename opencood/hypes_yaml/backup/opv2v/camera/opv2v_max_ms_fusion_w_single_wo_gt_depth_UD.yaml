@@ -1,0 +1,138 @@
+name: OPV2V_lift_splat_shoot_max_ms_w_single_w_depth_sup_UD
+root_dir: "/GPFS/rhome/yifanlu/OpenCOOD/dataset/OPV2V_MoreAgents/train"
+validate_dir: "/GPFS/rhome/yifanlu/OpenCOOD/dataset/OPV2V_MoreAgents/validate"
+test_dir: "/GPFS/rhome/yifanlu/OpenCOOD/dataset/OPV2V_MoreAgents/test"
+valid_data: "/GPFS/rhome/yifanlu/OpenCOOD/dataset/OPV2V_MoreAgents/dataset_annos/valid_data_info.pkl"
+
+yaml_parser: "load_lift_splat_shoot_params"
+train_params:
+  batch_size: &batch_size 3
+  epoches: 60
+  eval_freq: 3
+  save_freq: 2
+  max_cav: 5
+  supervise_single: &supervise_single True
+
+camera_params:
+  use_depth_gt: &use_depth_gt True
+  
+comm_range: 70
+
+add_data_extension: ['bev_visibility.png']
+
+noise_setting:
+  add_noise: False
+
+fusion:
+  core_method: 'CameraIntermediateFusionDataset' # LateFusionDataset, EarlyFusionDataset, IntermediateFusionDataset supported
+  args: 
+    proj_first: false # useless
+    grid_conf: &grid_conf
+      xbound: [-48, 48, 0.4]   # 限制x方向的范围并划分网格
+      ybound: [-48, 48, 0.4]   # 限制y方向的范围并划分网格
+      zbound: [-10, 10, 20.0]   # 限制z方向的范围并划分网格
+      ddiscr: [2, 50, 48]
+      mode: 'UD'
+    data_aug_conf: &data_aug_conf
+      resize_lim: [0.6, 0.7]
+      final_dim: [256, 352]
+      rot_lim: [-3.6, 3.6]
+      H: 600
+      W: 800
+      rand_flip: False
+      bot_pct_lim: [0.0, 0.20]
+      cams: ['camera0', 'camera1', 'camera2', 'camera3']
+      Ncams: 4
+
+# preprocess-related
+preprocess:
+  # options: BasePreprocessor, VoxelPreprocessor, BevPreprocessor
+  core_method: 'SpVoxelPreprocessor'
+  args:
+    voxel_size: &voxel_size [0.4, 0.4, 4]
+    max_points_per_voxel: 32
+    max_voxel_train: 32000
+    max_voxel_test: 70000
+  # lidar range for each individual cav.
+  cav_lidar_range: &cav_lidar [-48, -48, -3, 48, 48, 1]
+
+data_augment:
+  - NAME: random_world_flip
+    ALONG_AXIS_LIST: [ 'x' ]
+
+  - NAME: random_world_rotation
+    WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
+
+  - NAME: random_world_scaling
+    WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
+
+# anchor box related
+postprocess:
+  core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
+  gt_range: *cav_lidar
+  dir_args: &dir_args
+    dir_offset: 0.7853
+    num_bins: 2
+  anchor_args:
+    cav_lidar_range: *cav_lidar
+    l: 3.9
+    w: 1.6
+    h: 1.56
+    feature_stride: 2
+    r: &anchor_yaw [0, 90]
+    num: &achor_num 2
+  target_args:
+    pos_threshold: 0.6
+    neg_threshold: 0.45
+    score_threshold: 0.25
+  order: 'hwl' # hwl or lwh
+  max_num: 100 # maximum number of objects in a single frame. use this number to make sure different frames has the same dimension in the same batch
+  nms_thresh: 0.15
+
+# model related
+model:
+  core_method: lift_splat_shoot_intermediate
+  args:
+    outC: 128
+    anchor_number: *achor_num
+    grid_conf: *grid_conf
+    data_aug_conf: *data_aug_conf
+    dir_args: *dir_args
+    supervise_single: *supervise_single
+    use_depth_gt: False
+    depth_supervision: true
+
+    img_downsample: 8
+    img_features: 128
+
+    fusion_args:
+      core_method: max_ms
+      args:
+        voxel_size: *voxel_size
+        downsample_rate: 1
+        in_channels: 128
+
+loss:
+  core_method: point_pillar_dir_depth_loss
+  args:
+    cls_weight: 1.0
+    reg: 2.0
+    dir_args: 
+      dir_weight: 0.2
+      args: *dir_args
+      anchor_yaw: *anchor_yaw
+    depth_weight: 3
+
+
+optimizer:
+  core_method: Adam
+  lr: 0.0015
+  args:
+    eps: 1e-10
+    weight_decay: 1e-4
+
+lr_scheduler:
+  core_method: multistep #step, multistep and Exponential support
+  gamma: 0.1
+  step_size: [30, 45]
+

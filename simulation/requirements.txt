@@ -1,0 +1,11 @@
+tabulate
+shapely
+ephem
+opencv-python==4.2.0.34
+py-trees==0.8.3
+carla-birdeye-view==1.1.1
+networkx==2.2
+scikit-image
+pygame
+dictor
+setuptools==41.2.0

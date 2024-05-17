@@ -1,0 +1,135 @@
+name: dair_lss_max
+data_dir: "/GPFS/rhome/quanhaoli/workspace/dataset/my_dair_v2x/v2x_c/cooperative-vehicle-infrastructure"
+root_dir: "/GPFS/rhome/quanhaoli/workspace/dataset/my_dair_v2x/v2x_c/cooperative-vehicle-infrastructure/train.json"
+validate_dir: "/GPFS/rhome/quanhaoli/workspace/dataset/my_dair_v2x/v2x_c/cooperative-vehicle-infrastructure/val.json"
+test_dir: "/GPFS/rhome/quanhaoli/workspace/dataset/my_dair_v2x/v2x_c/cooperative-vehicle-infrastructure/val.json"
+
+noise_setting:
+  add_noise: False
+
+comm_range: 70
+
+yaml_parser: "load_lift_splat_shoot_params"
+
+train_params:
+  batch_size: &batch_size 4
+  epoches: 25
+  eval_freq: 2
+  save_freq: 2
+  max_cav: &max_cav 2
+  supervise_single: &supervise_single True
+
+camera_params:
+  use_depth_gt: &use_depth_gt false
+
+fusion:
+  core_method: 'CameraIntermediateFusionDatasetDAIR' # LateFusionDataset, EarlyFusionDataset, IntermediateFusionDataset supported
+  args:
+    proj_first: false
+    clip_pc: false
+    grid_conf: &grid_conf
+      xbound: [-48, 48, 0.4]   # 限制x方向的范围并划分网格
+      ybound: [-48, 48, 0.4]   # 限制y方向的范围并划分网格
+      zbound: [-10, 10, 20.0]   # 限制z方向的范围并划分网格
+      ddiscr: [2, 50, 48]
+      mode: 'LID'
+    data_aug_conf: &data_aug_conf
+      resize_lim: [0.6, 0.7]
+      final_dim: [450, 800]
+      rot_lim: [-3.6, 3.6]
+      H: 1080
+      W: 1920
+      rand_flip: False
+      bot_pct_lim: [0.0, 0.20]
+      Ncams: 1
+
+# preprocess-related
+preprocess:
+  # options: BasePreprocessor, VoxelPreprocessor, BevPreprocessor
+  core_method: 'SpVoxelPreprocessor'
+  args:
+    voxel_size: &voxel_size [0.4, 0.4, 4]
+    max_points_per_voxel: 32
+    max_voxel_train: 32000
+    max_voxel_test: 70000
+  # lidar range for each individual cav. Format: xyzxyz minmax
+  cav_lidar_range: &cav_lidar [-48, -48, -3, 48, 48, 1]
+
+data_augment:
+  - NAME: random_world_flip
+    ALONG_AXIS_LIST: [ 'x' ]
+
+  - NAME: random_world_rotation
+    WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
+
+  - NAME: random_world_scaling
+    WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
+
+# anchor box related
+postprocess:
+  core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
+  gt_range: *cav_lidar
+  dir_args: &dir_args
+    dir_offset: 0.7853
+    num_bins: 2
+  anchor_args:
+    cav_lidar_range: *cav_lidar
+    l: 4.5
+    w: 2
+    h: 1.56
+    r: &anchor_yaw [0, 90]
+    feature_stride: 2
+    num: &achor_num 2
+  target_args:
+    pos_threshold: 0.6
+    neg_threshold: 0.45
+    score_threshold: 0.25
+  order: 'hwl' # hwl or lwh
+  max_num: 100 # maximum number of objects in a single frame. use this number to make sure different frames has the same dimension in the same batch
+  nms_thresh: 0.15
+
+# model related
+model:
+  core_method: lift_splat_shoot_intermediate
+  args:
+    outC: 128 # bev
+    anchor_number: *achor_num
+    grid_conf: *grid_conf
+    data_aug_conf: *data_aug_conf
+    dir_args: *dir_args
+    supervise_single: *supervise_single
+    use_depth_gt: false
+    depth_supervision: false
+    img_downsample: 8
+    img_features: &img_features 128 # image
+
+    fusion_args:
+      core_method: max
+      args:
+        voxel_size: *voxel_size
+        downsample_rate: 2
+        in_channels: *img_features
+
+loss:
+  core_method: point_pillar_dir_depth_loss
+  args:
+    cls_weight: 1.0
+    reg: 2.0
+    dir_args: 
+      dir_weight: 0.2
+      args: *dir_args
+      anchor_yaw: *anchor_yaw
+    depth_weight: 3 
+
+optimizer:
+  core_method: Adam
+  lr: 0.0015
+  args:
+    eps: 1e-10
+    weight_decay: 1e-4
+
+lr_scheduler:
+  core_method: multistep #step, multistep and Exponential support
+  gamma: 0.1
+  step_size: [15, 25]
+

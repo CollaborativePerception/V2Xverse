@@ -1,0 +1,102 @@
+name: point_pillar_pre_calc_v2x2
+root_dir: "/GPFS/rhome/yifanlu/workspace/dataset/v2xsim2_info/v2xsim_infos_train.pkl"  # not dir, but file
+validate_dir: "/GPFS/rhome/yifanlu/workspace/dataset/v2xsim2_info/v2xsim_infos_val.pkl"
+test_dir: "/GPFS/rhome/yifanlu/workspace/dataset/v2xsim2_info/v2xsim_infos_test.pkl"
+
+noise_setting:
+  add_noise: False
+
+
+comm_range: 50
+
+yaml_parser: "load_point_pillar_params"
+train_params:
+  max_cav: &max_cav 5
+
+fusion:
+  core_method: 'IntermediateFusionDatasetV2X' # LateFusionDataset, EarlyFusionDataset, IntermediateFusionDataset supported
+  args:
+    proj_first: &proj_first False # must false
+
+# preprocess-related
+preprocess:
+  # options: BasePreprocessor, VoxelPreprocessor, BevPreprocessor
+  core_method: 'SpVoxelPreprocessor'
+  args:
+    voxel_size: &voxel_size [0.4, 0.4, 5]
+    max_points_per_voxel: 32
+    max_voxel_train: 32000
+    max_voxel_test: 70000
+  # lidar range for each individual cav. Format: xyzxyz minmax
+  cav_lidar_range: &cav_lidar [-32, -32, -3, 32, 32, 2]
+
+postprocess: &postprocess_param
+  core_method: 'UncertaintyVoxelPostprocessor'
+  gt_range: *cav_lidar
+  dir_args: &dir_args
+    dir_offset: 0.7853
+    num_bins: 2
+  anchor_args:
+    cav_lidar_range: *cav_lidar
+    l: 3.9
+    w: 1.6
+    h: 1.56
+    r: [0, 90]
+    feature_stride: 2
+    num: &achor_num 2
+  target_args:
+    pos_threshold: 0.6
+    neg_threshold: 0.45
+    score_threshold: 0.4
+  order: 'hwl' # hwl or lwh
+  max_num: 100 # maximum number of objects in a single frame. use this number to make sure different frames has the same dimension in the same batch
+  nms_thresh: 0.18
+
+
+data_augment:
+  - NAME: random_world_flip
+    ALONG_AXIS_LIST: [ 'x' ]
+
+  - NAME: random_world_rotation
+    WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
+
+  - NAME: random_world_scaling
+    WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
+
+box_align_pre_calc:
+  stage1_model: point_pillar_uncertainty
+
+  stage1_model_config:  
+    voxel_size: *voxel_size
+    lidar_range: *cav_lidar
+    anchor_number: *achor_num
+    uncertainty_dim: &uncertainty_dim 3
+    pillar_vfe:
+      use_norm: true
+      with_distance: false
+      use_absolute_xyz: true
+      num_filters: [64]
+    point_pillar_scatter:
+      num_features: 64
+
+    base_bev_backbone:
+      layer_nums: [3, 5, 8]
+      layer_strides: [2, 2, 2]
+      num_filters: [64, 128, 256]
+      upsample_strides: [1, 2, 4]
+      num_upsample_filter: [128, 128, 128]
+
+    anchor_num: *achor_num
+    dir_args: *dir_args
+
+  stage1_model_path: "/GPFS/rhome/yifanlu/OpenCOOD/opencood/logs/v2x2_pointpillar_uncertainty_new_d3_l2von_limit_v_001_s1_2022_09_12_11_09_00/net_epoch29.pth"
+  stage1_postprocessor_name: uncertainty_voxel_postprocessor
+  stage1_postprocessor_config: *postprocess_param
+
+# model related
+model:
+  core_method: point_pillar_intermediate # no use
+  args:
+    proj_first: *proj_first
+    point_pillar_scatter:
+      num_features: 64

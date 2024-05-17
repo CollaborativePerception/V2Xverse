@@ -1,0 +1,93 @@
+common:
+  input_frame: &INPUT_FRAME 5
+  output_points: &OUTPUT_POINTS 10
+  deg_range: &DET_RANGE [36, 12, 12, 12, 0.125]
+  skip_frames: &SKIP_FRAMES 1
+
+data:
+  training:
+    dataset:
+      type: "CarlaMVDatasetEnd2End"
+      root: 'external_paths/data_root/'
+      towns: [1,2,3,4,6]
+      weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      input_frame: *INPUT_FRAME
+      output_points: *OUTPUT_POINTS
+      det_range: *DET_RANGE
+      dataset_mode: 'train'
+    distributed_sampler:
+      type: "DistributedSampler"
+      shuffle: True
+      drop_last: True
+    dataloader:
+      type: "DataLoader"
+      batch_size: 8
+      num_workers: 8
+  validation:
+    dataset:
+      type: "CarlaMVDatasetEnd2End"
+      root: 'external_paths/data_root/'
+      towns: [7, 8, 10]
+      weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      input_frame: *INPUT_FRAME
+      output_points: *OUTPUT_POINTS
+      det_range: *DET_RANGE
+      dataset_mode: 'val'
+    distributed_sampler:
+      type: "DistributedSampler"
+      shuffle: False
+      drop_last: True
+    dataloader:
+      type: "DataLoader"
+      batch_size: 8
+      num_workers: 4
+  test:
+    dataset:
+      type: "CarlaMVDatasetEnd2End"
+      root: 'external_paths/data_root/'
+      towns: [5]
+      weathers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      input_frame: *INPUT_FRAME
+      output_points: *OUTPUT_POINTS
+      det_range: *DET_RANGE
+      dataset_mode: 'test'
+    distributed_sampler:
+      type: "DistributedSampler"
+      shuffle: False
+      drop_last: False
+    dataloader:
+      type: "DataLoader"
+      batch_size: 1
+      num_workers: 4
+
+model:
+  type: "WaypointPlanner_e2e"
+  feature_dir: 256
+  # TODO: other hyper-parameters
+
+model_decoration:
+  clip_grad: 10
+
+loss:
+  type: "CompoundLoss"
+  loss_configs:
+  - config:
+      type: "WaypointL1Loss"
+    weight: 1.0
+
+test_metric:
+  type: "ADE_FDE"
+
+training:
+  epochs: &EPOCHS 50
+  log_interval: 10
+  optimizer:
+    type: "AdamW"
+    lr: 0.0001
+    # --with-backbone-lr --backbone-lr 0.0002 \
+    weight_decay: 0.0005
+    eps: 1.0e-8
+  lr_scheduler:
+    type: 'CosineAnnealingLR'
+    T_max: *EPOCHS
+    eta_min: 1.0e-6

@@ -1,0 +1,39 @@
+---
+target_point_distance: 50
+turn_tgt_speeds: 6.0
+lane_tgt_speeds: 6.5
+min_speeds: 0.0
+max_speeds: 5.0
+num_speeds: 4
+min_orient: -95
+max_orient: 95
+num_orient: 5
+max_steers: 1.
+max_throts: 1.
+num_steers: 9
+num_throts: 3
+num_repeat: 4
+num_ignore_first: 50
+num_per_flush: 1000
+num_plan: 5
+thro_rew: 1.0
+brak_rew: 5.0
+stop_rew: 0.1
+temperature: 0.01
+camera_x: 1.5
+camera_z: 2.4
+camera_yaws: [0,-30,30]
+seg_channels: [4,6,7,10,18]
+seg_weight: 0.05
+wide_crop_top: 48
+narr_crop_bottom: 80
+imagenet_pretrained: True
+log_wandb: True
+noise_collect: False
+use_narr_cam: True
+multi_cam: True
+all_speeds: True
+ego_model_dir: 
+ego_data_dir: 
+main_model_dir: /GPFS/data/gjliu/Auto-driving/WOR/weights/main_model_10.th 
+main_data_dir: 

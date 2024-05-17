@@ -1,0 +1,167 @@
+name: v2xverse_late_multiclass
+root_dir: external_paths/data_root
+validate_dir: external_paths/data_root
+test_dir: external_paths/data_root
+
+yaml_parser: load_point_pillar_params
+
+train_params:
+  batch_size: 4
+  epoches: 40
+  eval_freq: 1
+  max_cav: 5
+  save_freq: 1
+
+input_source: ['lidar']
+label_type: lidar
+
+comm_range: 200
+
+fusion:
+  args:
+    clip_pc: false
+    proj_first: false
+  core_method: latemulticlass
+  dataset: v2xverse
+
+preprocess:
+  core_method: SpVoxelPreprocessor
+  args:
+    max_points_per_voxel: 32
+    max_voxel_test: 70000
+    max_voxel_train: 32000
+    voxel_size: &voxel_size [0.125, 0.125, 36]
+  cav_lidar_range: &lidar_range [-36, -12, -22, 36, 12, 14]
+
+data_augment:
+- ALONG_AXIS_LIST:
+  - x
+  NAME: random_world_flip
+- NAME: random_world_rotation
+  WORLD_ROT_ANGLE: [-0.78539816, 0.78539816]
+- NAME: random_world_scaling
+  WORLD_SCALE_RANGE: [0.95, 1.05]
+
+postprocess:
+  core_method: VoxelPostprocessor
+  anchor_args:
+    D: 1
+    H: 192
+    W: 576
+    cav_lidar_range: *lidar_range
+    feature_stride: 2
+    h: 1.56
+    l: 3.9
+    num: 1
+    r: &anchor_yaw [0]
+    vd: 36
+    vh: 0.125
+    vw: 0.125
+    w: 1.6
+  dir_args: &dir_args
+    anchor_yaw: *anchor_yaw
+    dir_offset: 0.7853
+    num_bins: 1
+  gt_range: *lidar_range
+  max_num: 100
+  nms_thresh: 0.15
+  order: hwl
+  target_args:
+    neg_threshold: 0.45
+    pos_threshold: 0.6
+    score_threshold: 0.2
+
+model:
+  core_method: point_pillar_multiclass
+  args:
+    anchor_number: 3
+    voxel_size: *voxel_size
+    lidar_range: *lidar_range
+    max_cav: 5
+    multi_class: true
+    out_size_factor: 2
+    supervise_single: true
+    fusion_method: max
+
+    att:
+      feat_dim: 64
+
+    base_bev_backbone:
+      compression: 0
+      layer_nums: &id002 [3, 4, 5]
+      layer_strides: [2, 2, 2]
+      num_filters: &id003 [64, 128, 256]
+      num_upsample_filter: [128, 128, 128]
+      resnet: true
+      upsample_strides: [1, 2, 4]
+      voxel_size: *voxel_size
+
+    fusion_args:
+      agg_operator:
+        feature_dim: 256
+        mode: MAX
+      downsample_rate: 2
+      dropout_rate: 0
+      in_channels: 256
+      layer_nums: *id002
+      multi_scale: false
+      n_head: 8
+      num_filters: *id003
+      only_attention: true
+      voxel_size: *voxel_size
+
+    pillar_vfe:
+      num_filters: [64]
+      use_absolute_xyz: true
+      use_norm: true
+      with_distance: false
+    point_pillar_scatter:
+      num_features: 64
+
+    shrink_header:
+      dim: [128]
+      input_dim: 384
+      kernal_size: [3]
+      padding: [1]
+      stride: [1]
+
+loss:
+  core_method: center_point_loss_multiclass
+  args:
+    cls_weight: 5.0
+    code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 5.0]
+    loc_weight: 1.0
+    target_assigner_config:
+      box_coder: ResidualCoder
+      cav_lidar_range: *lidar_range
+      gaussian_overlap: 0.1
+      max_objs: 40
+      min_radius: 2
+      out_size_factor: 2
+      voxel_size: *voxel_size
+  args:
+    pos_cls_weight: 1.0
+    cls:
+      type: 'SigmoidFocalLoss'
+      alpha: 0.25
+      gamma: 2.0
+      weight: 1.0
+    reg:
+      type: 'WeightedSmoothL1Loss'
+      sigma: 3.0
+      codewise: true
+      weight: 2.0
+
+optimizer:
+  args:
+    eps: 1.0e-10
+    weight_decay: 0.0002
+  core_method: Adam
+  lr: 0.0005
+
+lr_scheduler:
+  core_method: multistep
+  gamma: 0.1
+  step_size:
+  - 8
+  - 15

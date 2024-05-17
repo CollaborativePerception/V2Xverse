@@ -1,0 +1,207 @@
+name: A_v2xset_heter_sdta_layer1
+root_dir: "dataset/V2XSET/train"
+validate_dir: "dataset/V2XSET/validate"
+test_dir: "dataset/V2XSET/test"
+
+yaml_parser: "load_point_pillar_lss_params"
+train_params:
+  batch_size: &batch_size 12
+  epoches: 40
+  eval_freq: 2
+  save_freq: 2
+  max_cav: 5
+
+heter:
+  lidar_ratio: 0.5
+  ego_modality: random
+
+only_vis_ego: True
+
+input_source: ['lidar', 'camera']
+label_type: 'lidar'
+
+comm_range: 70
+
+fusion:
+  core_method: 'intermediate'
+  dataset: 'v2xset'
+  args: 
+    proj_first: false
+    grid_conf: &grid_conf
+      xbound: [-72, 72, 0.4]   # 限制x方向的范围并划分网格
+      ybound: [-48, 48, 0.4]   # 限制y方向的范围并划分网格
+      zbound: [-10, 10, 20.0]   # 限制z方向的范围并划分网格
+      ddiscr: [2, 50, 48]
+      mode: 'LID'
+    data_aug_conf: &data_aug_conf
+      resize_lim: [0.65, 0.7]
+      final_dim: [384, 512]
+      rot_lim: [-3.6, 3.6]
+      H: 600
+      W: 800
+      rand_flip: False
+      bot_pct_lim: [0.0, 0.05]
+      cams: ['camera0', 'camera1', 'camera2', 'camera3']
+      Ncams: 4
+
+# preprocess-related
+preprocess:
+  # options: BasePreprocessor, VoxelPreprocessor, BevPreprocessor
+  core_method: 'SpVoxelPreprocessor'
+  args:
+    voxel_size: &voxel_size [0.4, 0.4, 4]
+    max_points_per_voxel: 32
+    max_voxel_train: 32000
+    max_voxel_test: 70000
+  # lidar range for each individual cav.
+  cav_lidar_range: &cav_lidar [-72, -48, -3, 72, 48, 1]
+
+data_augment:
+  - NAME: random_world_flip
+    ALONG_AXIS_LIST: [ 'x' ]
+
+  - NAME: random_world_rotation
+    WORLD_ROT_ANGLE: [ -0.78539816, 0.78539816 ]
+
+  - NAME: random_world_scaling
+    WORLD_SCALE_RANGE: [ 0.95, 1.05 ]
+
+# anchor box related
+postprocess:
+  core_method: 'VoxelPostprocessor' # VoxelPostprocessor, BevPostprocessor supported
+  gt_range: *cav_lidar
+  anchor_args:
+    cav_lidar_range: *cav_lidar
+    l: 3.9
+    w: 1.6
+    h: 1.56
+    r: &anchor_yaw [0, 90]
+    feature_stride: 2
+    num: &anchor_num 2
+  target_args:
+    pos_threshold: 0.6
+    neg_threshold: 0.45
+    score_threshold: 0.2
+  order: 'hwl' # hwl or lwh
+  max_num: 100 # maximum number of objects in a single frame. use this number to make sure different frames has the same dimension in the same batch
+  nms_thresh: 0.15
+  dir_args: &dir_args
+    dir_offset: 0.7853
+    num_bins: 2
+    anchor_yaw: *anchor_yaw
+
+# model related
+model:
+  core_method: heter_pointpillars_lift_splat_v2
+  args:
+    lidar_args:
+      voxel_size: *voxel_size
+      lidar_range: *cav_lidar
+      anchor_number: *anchor_num
+      dir_args: *dir_args
+      pillar_vfe:
+        use_norm: true
+        with_distance: false
+        use_absolute_xyz: true
+        num_filters: [64]
+      point_pillar_scatter:
+        num_features: 64
+
+    lidar_backbone:
+      layer_nums: [3, 5, 8]
+      layer_strides: [2, 2, 2]
+      num_filters: [64, 128, 256]
+      upsample_strides: [1, 2, 4]
+      num_upsample_filter: [128, 128, 128]
+
+    camera_args:
+      anchor_number: *anchor_num
+      grid_conf: *grid_conf
+      data_aug_conf: *data_aug_conf
+      img_downsample: 8
+      img_features: &img_feature 128
+      use_depth_gt: false
+      depth_supervision: false
+      supervise_single: true
+      bevout_feature: 128
+      camera_encoder: EfficientNet
+
+    camera_mask_args:
+      cav_lidar_range: *cav_lidar
+      grid_conf: *grid_conf
+
+    camera_backbone:
+      layer_nums: [3, 5, 8]
+      layer_strides: [2, 2, 2]
+      num_filters: [64, 128, 256]
+      upsample_strides: [1, 2, 4]
+      num_upsample_filter: [128, 128, 128]
+      inplanes: 128
+
+    lidar_aligner:
+      core_method: sdta
+      args: 
+        in_ch: 64
+        layer_num: 2
+
+    camera_aligner:
+      core_method: sdta
+      args: 
+        in_ch: 64
+        layer_num: 2
+
+    fusion_method: max # multiscale
+
+    fusion_backbone: 
+      layer_nums: [3, 5, 8]
+      layer_strides: [2, 2, 2]
+      num_filters: [64, 128, 256]
+      upsample_strides: [1, 2, 4]
+      num_upsample_filter: [128, 128, 128]
+
+    shrink_header: # lidar
+      kernal_size: [ 3 ]
+      stride: [ 1 ]
+      padding: [ 1 ]
+      dim: [ 256 ]
+      input_dim: 384 # 128 * 3
+
+
+    in_head: 256
+    anchor_number: *anchor_num
+    dir_args: *dir_args
+
+    freeze_lidar: true
+    freeze_camera: true
+
+loss:
+  core_method: point_pillar_loss
+  args:
+    pos_cls_weight: 2.0
+    cls:
+      type: 'SigmoidFocalLoss'
+      alpha: 0.25
+      gamma: 2.0
+      weight: 1.0
+    reg:
+      type: 'WeightedSmoothL1Loss'
+      sigma: 3.0
+      codewise: true
+      weight: 2.0
+    dir:
+      type: 'WeightedSoftmaxClassificationLoss'
+      weight: 0.2
+      args: *dir_args
+
+optimizer:
+  core_method: Adam
+  lr: 0.002
+  args:
+    eps: 1e-10
+    weight_decay: 1e-4
+
+lr_scheduler:
+  core_method: multistep #step, multistep and Exponential support
+  gamma: 0.1
+  step_size: [10, 15]
+

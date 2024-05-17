@@ -1,0 +1,2 @@
+ckpt_path: third_party/leaderboard/team_code/transfuser
+target_distance: 10

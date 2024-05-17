@@ -1,0 +1,14 @@
+# detection-related
+icecream
+opencv-python-headless
+open3d
+matplotlib
+tensorboardx
+pyyaml
+h5py
+einops
+pyquaternion
+numpy
+cython
+tensorboardX
+imageio

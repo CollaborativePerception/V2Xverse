@@ -291,3 +291,13 @@ This implementation is based on code from several repositories.
 - [Interfuser](https://github.com/opendilab/InterFuser)
 - [Opencood](https://github.com/DerrickXuNu/OpenCOOD)
 - [HEAL](https://github.com/yifanlu0227/HEAL)
+
+## Citation
+```
+@article{liu2024codriving,
+  title={Towards Collaborative Autonomous Driving: Simulation Platform and End-to-End System},
+  author={Liu, Genjia and Hu, Yue and Xu, Chenxin and Mao, Weibo and Ge, Junhao and Huang, Zhengxiang and Lu, Yifan and Xu, Yinda and Xia, Junkai and Wang, Yafei and others},
+  journal={arXiv preprint arXiv:2404.09496},
+  year={2024}
+}
+```

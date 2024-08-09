@@ -186,7 +186,7 @@ def main():
                 criterion.logging(epoch, i, len(train_loader), writer, suffix="_single")
 
             if not opt.half:
-                # final_loss.backward(create_graph=False)
+                final_loss.backward(create_graph=False)
                 # torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0, norm_type=2.0)
                 optimizer.step()
             else:

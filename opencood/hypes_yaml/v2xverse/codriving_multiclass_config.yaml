@@ -73,7 +73,7 @@ postprocess:
     score_threshold: 0.2
 
 model:
-  core_method: center_point_where2comm_multiclass
+  core_method: center_point_codriving
   args:
     anchor_number: 3
     voxel_size: *voxel_size

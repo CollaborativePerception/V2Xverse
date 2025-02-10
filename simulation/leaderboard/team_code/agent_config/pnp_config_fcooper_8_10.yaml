@@ -36,10 +36,10 @@ perception:
     detect_threshold: *det_thre        #
     detection_range: [36, 12, 12, 12] # front rear left right
     # perception model directory, including model checkpoint and config file
-    perception_model_dir: 'checkpoints/codriving'
+    perception_model_dir: 'checkpoints/fcooper/perception'
 
 planning:
     core_method: 'MotionNet'
-    planner_config: "codriving/hypes_yaml/codriving/end2end_codriving.yaml"
+    planner_config: "codriving/hypes_yaml/codriving/end2end_fcooper.yaml"
     # planner model checkpoint
-    planner_model_checkpoint: 'checkpoints/codriving/planner/codriving_planner.ckpt'
+    planner_model_checkpoint: 'checkpoints/fcooper/planner/fcooper_planner.ckpt' 

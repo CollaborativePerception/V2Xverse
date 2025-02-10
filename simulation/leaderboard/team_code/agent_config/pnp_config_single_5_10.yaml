@@ -42,5 +42,5 @@ planning:
     core_method: 'MotionNet'
     planner_config: "codriving/hypes_yaml/codriving/end2end_codriving.yaml"
     # planner model checkpoint
-    planner_model_checkpoint: 'checkpoints/no_collaboration/no_collaboration_planner.ckpt' # '/GPFS/data/gjliu/Auto-driving/V2Xverse/out_dir/planner_e2e-DB30-20240304-142908/models/epoch_15.ckpt' 
+    planner_model_checkpoint: 'checkpoints/no_collaboration/planner/no_collaboration_planner.ckpt' # '/GPFS/data/gjliu/Auto-driving/V2Xverse/out_dir/planner_e2e-DB30-20240304-142908/models/epoch_15.ckpt' 
 

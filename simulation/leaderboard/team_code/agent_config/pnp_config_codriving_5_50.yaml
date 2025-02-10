@@ -42,4 +42,4 @@ planning:
     core_method: 'MotionNet'
     planner_config: "codriving/hypes_yaml/codriving/end2end_codriving.yaml"
     # planner model checkpoint
-    planner_model_checkpoint: 'checkpoints/codriving/codriving_planner.ckpt'
+    planner_model_checkpoint: 'checkpoints/codriving/planner/codriving_planner.ckpt'

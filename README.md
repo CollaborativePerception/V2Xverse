@@ -103,7 +103,9 @@ pip install efficientnet_pytorch==0.7.0
 ```
 
 ## <span id="dataset"> Dataset
-There are two ways to obtain dataset, you can generate a dataset by youself or download one from google drivie(coming soon). Here are the steps to generate a dataset, where we employ a strong privileged rule-based expert agent as supervisor.
+There are two ways to obtain dataset, you can generate a dataset by youself or download one from [huggingface](https://huggingface.co/datasets/gjliu/V2Xverse), you may download dataset at the root directory of this repository.
+
+Here are the steps to generate a dataset, where we employ a strong privileged rule-based expert agent as supervisor.
 
 ```Shell
 # Generate a dataset in parallel
@@ -259,6 +261,16 @@ Arguments Explanation:
 - `Scenario_config`: configuration of scenario, corresponding to the file `simulation/leaderboard/leaderboard/scenarios/scenario_parameter_${Scenario_config}.yaml`. We provide five configuration files in advance.
 
 
+## <span id="Checkpoints"> Checkpoints
+Your can download the checkpoints from [codriving models on huggingface](https://huggingface.co/gjliu/v2xverse) and put each folder in `./checkpoints`, for example:
+
+```Shell
+|--checkpoints
+    |--codriving
+        |--perception
+        |--planning
+```
+
 ## <span id="Shutdown"> Shut down simulation on Linux
 Carla processes may fail to stop，please kill them in time.
 
@@ -281,7 +293,7 @@ pkill -u username -f carla
 - [x] Training
 - [x] Closed-loop evaluation
 - [x] Modular evaluation
-- [ ] Dataset and checkpoint release
+- [x] Dataset and checkpoint release
 
 
 ## <span id="Acknowledgements"> Acknowledgements

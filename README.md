@@ -1,4 +1,4 @@
-# Towards Collaborative Autonomous Driving: Simulation Platform and End-to-End System (Beta)
+# Towards Collaborative Autonomous Driving: Simulation Platform and End-to-End System
 
 [Paper](https://arxiv.org/pdf/2404.09496) | [Project page](https://collaborativeperception.github.io/V2Xverse/)
 

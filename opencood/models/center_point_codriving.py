@@ -6,7 +6,7 @@ from opencood.models.sub_modules.base_bev_backbone import BaseBEVBackbone
 from opencood.models.sub_modules.base_bev_backbone_resnet import ResNetBEVBackbone
 from opencood.models.sub_modules.downsample_conv import DownsampleConv
 from opencood.models.sub_modules.naive_compress import NaiveCompressor
-from opencood.models.fuse_modules.codriving_attn import Where2comm
+from opencood.models.fuse_modules.codriving_attn import CoDriving
 import torch
 
 class centerpointcodriving(nn.Module):
@@ -48,7 +48,7 @@ class centerpointcodriving(nn.Module):
             self.dcn_net = DCNNet(args['dcn'])
 
         # self.fusion_net = TransformerFusion(args['fusion_args'])
-        self.fusion_net = Where2comm(args['fusion_args'])
+        self.fusion_net = CoDriving(args['fusion_args'])
         self.multi_scale = args['fusion_args']['multi_scale']
 
         self.cls_head = nn.Conv2d(self.out_channel, args['anchor_number'],

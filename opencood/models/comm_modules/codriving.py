@@ -9,6 +9,7 @@ import copy
 import random
 
 from opencood.models.sub_modules.torch_transformation_utils import warp_affine_simple
+from opencood.utils.waypoint2map import waypoints2map_radius 
 
 class Communication(nn.Module):
     def __init__(self, args):
@@ -88,7 +89,7 @@ class Communication(nn.Module):
             if waypoints is not None: # only used with waypoints prediction model
                 # assert B==1 # waypoints.size(0)==len(record_len)
 
-                from opencood.utils.waypoint2map import waypoints2map_radius  # radius=40  sigma_reverse=5
+                # radius=40  sigma_reverse=5
                 bev_grad_cam = waypoints2map_radius( waypoints.cpu().numpy(), radius=self.args.get('radius',160), sigma_reverse=self.args.get('sigma_reverse',2), \
                                                     grid_coord=[batch_confidence_maps[b].size(2),batch_confidence_maps[b].size(3), \
                                                                 self.det_range[4]/(self.det_range[4]-self.det_range[1]),\

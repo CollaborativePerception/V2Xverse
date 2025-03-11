@@ -171,10 +171,11 @@ def add_pe_map(x):
     return x_pe
 
 
-class Where2comm(nn.Module):
+class CoDriving(nn.Module):
     def __init__(self, args):
-        super(Where2comm, self).__init__()
+        super(CoDriving, self).__init__()
 
+        self.args = args
         self.communication = False
         self.round = 1
         if 'communication' in args:

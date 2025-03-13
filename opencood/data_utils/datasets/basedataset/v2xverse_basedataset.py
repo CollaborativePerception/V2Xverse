@@ -30,6 +30,7 @@ class V2XVERSEBaseDataset(Dataset):
         self.params = params
         self.visualize = visualize
         self.train = train
+        self.first_det = False
 
         self.pre_processor = build_preprocessor(params["preprocess"], train)
         self.post_processor = build_postprocessor(params["postprocess"], train)
@@ -38,6 +39,7 @@ class V2XVERSEBaseDataset(Dataset):
 
         self.frame_gap = params.get('frame_gap',200)
         self.time_delay = params.get('time_delay',0)
+        self.label_mode = self.params.get('label_mode', 'v2xverse')
 
         if 'target_assigner_config' in self.params['loss']['args']:
             self.det_range = self.params['loss']['args']['target_assigner_config']['cav_lidar_range'] # [-36, -36, -22, 36, 36, 14]
@@ -184,8 +186,8 @@ class V2XVERSEBaseDataset(Dataset):
                             scene_dict['rsu'].append(os.path.join(path, rsu_path))
 
                     self.route_frames.append((scene_dict, i)) # (scene_dict, i)
-        self.label_mode = self.params.get('label_mode', 'v2xverse')
-        self.first_det = False
+        
+        
         print("Sub route dir nums: %d" % len(self.route_frames))
 
     def _load_text(self, path):

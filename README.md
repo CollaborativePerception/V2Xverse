@@ -7,6 +7,11 @@ This repository contains the official PyTorch implementation of paper "Towards C
 ![V2X autonomous driving](simulation/demo/demo.gif)
 
 ## Features
+Open source:
+- [x] Dataset
+- [x] Checkpoints
+
+
 Support the developing of our CoDriving system in three tasks:
 - [x] Closed-loop driving
 - [x] 3D object detection

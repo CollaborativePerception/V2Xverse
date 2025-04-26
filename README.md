@@ -257,6 +257,14 @@ CUDA_VISIBLE_DEVICES=0 ./external_paths/carla_root/CarlaUE4.sh --world-port=${Ca
 
 # Evaluation on one route
 CUDA_VISIBLE_DEVICES=0 bash scripts/eval_driving_e2e.sh ${Route_id} ${Carla_port} ${Method_tag} ${Repeat_id} ${Agent_config} ${Scenario_config}
+
+# Evaluation on all routes (split into 5 subsets)
+bash scripts/batch_eval_driving_e2e.sh ${cuda_device} ${Carla_port} ${Method_tag} ${Repeat_id} ${Agent_config} 1s
+bash scripts/batch_eval_driving_e2e.sh ${cuda_device} ${Carla_port} ${Method_tag} ${Repeat_id} ${Agent_config} 2s
+bash scripts/batch_eval_driving_e2e.sh ${cuda_device} ${Carla_port} ${Method_tag} ${Repeat_id} ${Agent_config} 3s
+bash scripts/batch_eval_driving_e2e.sh ${cuda_device} ${Carla_port} ${Method_tag} ${Repeat_id} ${Agent_config} 4s
+bash scripts/batch_eval_driving_e2e.sh ${cuda_device} ${Carla_port} ${Method_tag} ${Repeat_id} ${Agent_config} 5s
+
 ```
 Arguments Explanation:
 - `Route_id`: the id of test route, corresponding to the route file `simulation/leaderboard/data/evaluation_routes/town05_short_r${route_id}.xml`. The route is defined through a sequence of waypoints in Carla town.

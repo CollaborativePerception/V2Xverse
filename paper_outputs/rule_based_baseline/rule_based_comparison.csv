@@ -1,0 +1,5 @@
+method,n,mean_score,completion_rate,collisions_per_km
+pid_only,315,45.47,0.902,35.58
+rule_based_cbf,105,64.46,0.895,12.8
+fixed_cbf,315,67.39,0.883,9.56
+rl_cbf_adaptive,315,75.81,0.908,6.75

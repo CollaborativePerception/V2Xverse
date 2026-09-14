@@ -1,0 +1,95 @@
+{
+    "speed": 7.87231585398158,
+    "waypoints": [
+        [
+            0.0,
+            -1.100000023841858
+        ],
+        [
+            -0.0,
+            -2.0899999141693115
+        ],
+        [
+            -0.019999999552965164,
+            -2.940000057220459
+        ],
+        [
+            -0.019999999552965164,
+            -3.690000057220459
+        ],
+        [
+            -0.03999999910593033,
+            -4.369999885559082
+        ],
+        [
+            -0.05999999865889549,
+            -5.0
+        ],
+        [
+            -0.07999999821186066,
+            -5.579999923706055
+        ],
+        [
+            -0.10000000149011612,
+            -6.170000076293945
+        ],
+        [
+            -0.11999999731779099,
+            -6.71999979019165
+        ],
+        [
+            -0.14000000059604645,
+            -7.340000152587891
+        ]
+    ],
+    "target": [
+        0.013847381354255173,
+        -4.606078422474949
+    ],
+    "route_length": 0,
+    "route_time": 0,
+    "drive_length": 0,
+    "drive_time": 0,
+    "old_desired_speed": 8.633513450622559,
+    "cbf_info": {
+        "status": "solved",
+        "solve_time_ms": 0.02674,
+        "max_slack": 0.0,
+        "num_active_slack": 0,
+        "min_barrier_value": 2.946273998816536,
+        "num_constraints": 2,
+        "num_considered_actors": 7,
+        "num_filtered_behind": 1,
+        "num_filtered_lateral": 4,
+        "num_crossing_kept": 0,
+        "min_barrier_actor_id": 234367,
+        "min_barrier_actor_type": "vehicle",
+        "min_barrier_actor_dist": 10.418720245361328,
+        "min_barrier_actor_closing_speed": 3.2066304683685303,
+        "min_barrier_actor_heading_alignment": 0.9998131990432739,
+        "min_barrier_actor_gamma": 0.800000011920929,
+        "min_barrier_actor_rhs": -1.7156931405018456,
+        "min_barrier_actor_a_coeff": -0.019996263980865483,
+        "tightest_actor_id": 234367,
+        "tightest_actor_type": "vehicle",
+        "tightest_actor_nominal_residual": -1.6395909402832063,
+        "tightest_actor_dist": 10.418720245361328,
+        "tightest_actor_closing_speed": 3.2066304683685303,
+        "tightest_actor_heading_alignment": 0.9998131990432739,
+        "tightest_actor_gamma": 0.800000011920929,
+        "tightest_actor_rhs": -1.7156931405018456,
+        "tightest_actor_a_coeff": -0.019996263980865483
+    },
+    "desired_speed": 8.633513450622559,
+    "gammas": {
+        "gamma_vehicle": 0.800000011920929,
+        "gamma_ped": 0.09571188688278198,
+        "gamma_bike": 0.7794253826141357
+    },
+    "steer": 0.003033311330119577,
+    "throttle": 0.75,
+    "brake": 0.0,
+    "lidar_pose_x": 25.174259185791016,
+    "lidar_pose_y": -45.219749450683594,
+    "theta": 3.1736650466918945
+}

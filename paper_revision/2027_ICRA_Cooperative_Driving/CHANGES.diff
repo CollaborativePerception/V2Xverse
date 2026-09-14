@@ -1,0 +1,285 @@
+############################################################
+### 1_Introduction.tex
+############################################################
+--- /tmp/claude-1026/-home-henaparween-mars-lab-V2Xverse/e1aa3ec5-681d-4e88-aeef-e3e95a0353eb/scratchpad/original_zip_extract/1_Introduction.tex	2026-08-30 23:15:38.000000000 -0500
++++ /home/henaparween/mars_lab/V2Xverse-ASRL/paper_revision/2027_ICRA_Cooperative_Driving/1_Introduction.tex	2026-08-30 18:05:51.095509421 -0500
+@@ -7,6 +7,8 @@
+ 
+ Control Barrier Functions (CBFs) offer a mechanism to enforce safety at the control level by restricting actions to remain within a forward invariant safe set~\cite{ames2017cbf, ames_control_2019}. A CBF quadratic program (QP) minimally modifies the nominal command to satisfy the barrier constraints. A central parameter is the barrier gain $\gamma$, which determines how strongly the filter enforces the safety boundary. Its effect is state-dependent: near the safety boundary or under unfavorable closing dynamics, a larger $\gamma$ triggers earlier intervention, whereas in safer states the same gain has little effect. A fixed $\gamma$ therefore imposes a single operating point that must simultaneously handle cruise, dense vehicle interactions, pedestrian crossings, and bicycle conflicts. Conservative settings protect safety but reduce throughput; permissive settings preserve progress but under-react to rapidly evolving hazards. This motivates learning a context-dependent gain policy that adapts barrier enforcement online.
+ 
++Retraining the upstream planner with a safety-aware objective, given its access to full V2X perception, is a natural alternative to a separate safety layer. We deliberately choose a frozen-planner adapter instead, for three reasons. First, parameter efficiency: our CBF-gain policy has on the order of $10^4$ trainable parameters, roughly three orders of magnitude fewer than the collaborative perception-planning stack it sits downstream of. Second, risk isolation: retraining the planner risks degrading an already-validated perception or planning behavior on its primary task, whereas a frozen-planner adapter cannot regress planning quality by construction. Third, portability: the safety layer attaches to any upstream planner's output trajectory without requiring access to that planner's training pipeline, weights, or architecture, a property a retrained, safety-aware planner would not have.
++
+ We address this by integrating adaptive safety modulation into V2Xverse, employing constrained reinforcement learning to learn state-dependent CBF gains. Building on recent work that learns adaptive barrier gains in simplified multi-agent settings~\cite{berducci2024las}, we keep collaborative perception and planning frozen and train only a compact policy ($\sim$10k parameters) that outputs class-specific CBF gains (one each for vehicles, pedestrians, and bicycles) at every decision step. The learned gains parameterize a CBF-QP filter~\cite{ames2017cbf} that adjusts longitudinal control while preserving the nominal steering path. Training uses a constrained PPO variant~\cite{schulman2017ppo} with a PID-based Lagrangian multiplier~\cite{stooke2020pid} to satisfy a cumulative safety cost budget. Because the upstream stack is untouched, the training is sample-efficient, and any change in safety or efficiency is attributable solely to the adaptive control layer. Unlike end-to-end RL approaches that learn perception, planning, and control jointly, our design is interpretable (the output is a small set of physically meaningful gains), composable (it wraps any nominal controller), and lightweight to train.
+ 
+ The contributions of this paper are:
+
+############################################################
+### 2_Related_work.tex
+############################################################
+--- /tmp/claude-1026/-home-henaparween-mars-lab-V2Xverse/e1aa3ec5-681d-4e88-aeef-e3e95a0353eb/scratchpad/original_zip_extract/2_Related_work.tex	2026-08-30 23:15:38.000000000 -0500
++++ /home/henaparween/mars_lab/V2Xverse-ASRL/paper_revision/2027_ICRA_Cooperative_Driving/2_Related_work.tex	2026-08-30 18:06:02.124509393 -0500
+@@ -17,4 +17,4 @@
+ \subsection{Safe Reinforcement Learning for Adaptive Safety Layers}
+ Safe reinforcement learning is commonly formulated as a constrained Markov decision process (CMDP), where the objective maximizes the expected return while satisfying expected cost constraints \cite{altman1999cmdp}. Surveys highlight recurring themes: constraint satisfaction can be enforced through penalty shaping, Lagrangian relaxation, shielding/safety layers, or model-based reachability, each with different sample efficiency and guarantee trade-offs \cite{garcia2015survey}. For on-policy policy-gradient methods, Lagrangian-based updates remain popular due to simplicity and compatibility with scalable deep RL.
+ 
+-Constrained Policy Optimization (CPO) provides trust region style updates that approximately satisfy constraints during learning \cite{achiam2017cpo}, while PPO offers a clipped surrogate objective that is widely adopted for stable on-policy training \cite{schulman2017ppo}. Practical constrained PPO variants often use Lagrangian relaxation, and PID-style updates have been proposed to improve the responsiveness of the Lagrange multiplier under changing constraint violations \cite{stooke2020pid}. Benchmarking environments such as Safety Gym have helped standardize the empirical evaluation of constraint satisfaction in continuous control \cite{ray2019safetygym}. In this context, Learning Adaptive Safety for Multi-Agent Systems demonstrates that adaptive CBF parameterization can be learned to balance feasibility, safety, and performance in multi-agent settings \cite{berducci2024las}. Building on these ideas, the present work focuses on collaborative autonomous driving and adapts CBF enforcement online while keeping perception and planning frozen, targeting system-level safety outcomes under V2X-enabled interaction \cite{liu2024v2xverse}.
+\ No newline at end of file
++Constrained Policy Optimization (CPO) provides trust region style updates that approximately satisfy constraints during learning \cite{achiam2017cpo}, while PPO offers a clipped surrogate objective that is widely adopted for stable on-policy training \cite{schulman2017ppo}. Practical constrained PPO variants often use Lagrangian relaxation, and PID-style updates have been proposed to improve the responsiveness of the Lagrange multiplier under changing constraint violations \cite{stooke2020pid}. Benchmarking environments such as Safety Gym have helped standardize the empirical evaluation of constraint satisfaction in continuous control \cite{ray2019safetygym}. In this context, Learning Adaptive Safety for Multi-Agent Systems demonstrates that adaptive CBF parameterization can be learned to balance feasibility, safety, and performance in multi-agent settings \cite{berducci2024las}. Our work differs from this closest prior CBF+RL safety-layer study in more than the target application: we use a class-aware action space that outputs a separate barrier gain per actor class rather than a single scalar gain; a PID-Lagrangian update tuned for the noisy, finite-length rollout statistics that closed-loop CARLA training produces, rather than the more idealized dual-ascent settings typical of simplified multi-agent benchmarks; and we integrate with a real learned collaborative-perception front end rather than idealized ground-truth multi-agent state. Building on these ideas, the present work focuses on collaborative autonomous driving and adapts CBF enforcement online while keeping perception and planning frozen, targeting system-level safety outcomes under V2X-enabled interaction \cite{liu2024v2xverse}.
+\ No newline at end of file
+
+############################################################
+### 3_Method.tex
+############################################################
+--- /tmp/claude-1026/-home-henaparween-mars-lab-V2Xverse/e1aa3ec5-681d-4e88-aeef-e3e95a0353eb/scratchpad/original_zip_extract/3_Method.tex	2026-08-30 23:15:38.000000000 -0500
++++ /home/henaparween/mars_lab/V2Xverse-ASRL/paper_revision/2027_ICRA_Cooperative_Driving/3_Method.tex	2026-08-30 18:03:45.558509740 -0500
+@@ -55,10 +55,11 @@
+ d_i^{\text{safe}} = r_{\text{ego}} + r_i + m,
+ \end{equation}
+ \begin{equation}
+-h_i = d_i - d_i^{\text{safe}} - \frac{(v_i^{\text{close}})^2}{2\,a_{\text{brake}}}.
++h_i = d_i - d_i^{\text{safe}} - \frac{(\tilde v_i^{\text{close}})^2}{2\,a_{\text{brake}}}, \qquad
++\tilde v_i^{\text{close}} = v_i^{\text{close}} + a_i^{\max}\,\Delta t.
+ \end{equation}
+ 
+-Each term in $h_i$ has a clear physical meaning. The first, $d_i$, is the current center-to-center distance. The second, $d_i^{\text{safe}}$, covers the physical sizes of both agents plus the clearance margin. The third, $(v_i^{\text{close}})^2 / (2\, a_{\text{brake}})$, is the stopping distance that ego would need if it braked at its maximum deceleration $a_{\text{brake}}$ from the current closing speed. When $h_i \ge 0$, there is still enough room to stop before reaching the actor $i$; when $h_i < 0$, the ego is already inside the braking zone and the risk of collision is high. Actors who are far away or moving apart ($v_i^{\text{close}} = 0$) produce large positive $h_i$ and do not constrain the ego.
++Each term in $h_i$ has a clear physical meaning. The first, $d_i$, is the current center-to-center distance. The second, $d_i^{\text{safe}}$, covers the physical sizes of both agents plus the clearance margin. The third, $(\tilde v_i^{\text{close}})^2 / (2\, a_{\text{brake}})$, is the stopping distance that ego would need if it braked at its maximum deceleration $a_{\text{brake}}$ from a closing speed that bounds the actor's own acceleration over the decision interval: rather than assuming actor velocity is exactly constant, $\tilde v_i^{\text{close}}$ inflates the raw closing speed by the actor's maximum plausible acceleration toward the ego, $a_i^{\max}$, applied over $\Delta t$. This bounds the actor-acceleration risk that a pure constant-velocity model would otherwise ignore, which matters most for pedestrians and cyclists, whose accelerations are a larger fraction of their speed than a vehicle's. When $h_i \ge 0$, there is still enough room to stop before reaching the actor $i$ even under this worst-case acceleration bound; when $h_i < 0$, the ego is already inside the braking zone and the risk of collision is high. Actors who are far away or moving apart ($v_i^{\text{close}} = 0$) produce large positive $h_i$ and do not constrain the ego.
+ 
+ 
+ The path-aware filter is defined in the ego frame. Actors who are sufficiently behind the ego are ignored, and actors far from the ego lane corridor are ignored unless they are likely to cross into the ego path within a short time horizon. This reduces unnecessary braking caused by traffic in adjacent lanes or in the opposite-direction, while still preserving responsiveness to relevant crossing interactions.
+@@ -76,12 +77,24 @@
+ 
+ The linearized coefficients are:
+ \begin{align}
+-\alpha_i &= -\tfrac{1}{2}\,\eta_i\,\Delta t^2, \\
++\alpha_i &= -\tfrac{1}{2}\,\bar\eta_i\,\Delta t^2, \\
+ \beta_i  &= -\gamma_i\, h_i \;-\; v_i^{\text{los}}\,\Delta t, \\
+ \eta_i   &= \hat{e}_{\text{ego}}^\top \hat{u}_i,
+ \end{align}
+ where $\hat{e}_{\text{ego}}$ is the unit vector along the direction of the ego vehicle and $\eta_i$ is the direction alignment, defined as the cosine of the angle between the ego's forward direction and the line of sight to actor $i$. An actor directly ahead has $\eta_i \approx 1$, making the constraint more restrictive; actors behind or to the side have smaller or negative $\eta_i$ and impose weaker longitudinal restrictions.
+ 
++At a near-perpendicular crossing, $\eta_i \approx 0$, which collapses $\alpha_i$ to zero and degenerates constraint~\eqref{eq:qp-cbf} to $s_i \ge \beta_i$: the QP can satisfy it purely through slack, with no actual braking, exactly when a crossing pedestrian or cyclist most needs longitudinal protection. We guard against this by flooring the alignment magnitude used in $\alpha_i$ once the actor is already inside the danger zone:
++\begin{equation}
++\bar\eta_i =
++\begin{cases}
++\operatorname{sign}(\eta_i)\,\eta_{\text{floor}}, & h_i < 0 \text{ and } |\eta_i| < \eta_{\text{floor}}, \\
++\eta_i, & \text{otherwise},
++\end{cases}
++\end{equation}
++where $\eta_{\text{floor}} > 0$ is a small constant. The floor only activates once the barrier is already violated ($h_i < 0$); it never flips the sign of $\eta_i$ and leaves well-aligned actors ($|\eta_i| \ge \eta_{\text{floor}}$) untouched, so the constraint keeps requiring the QP to trade off against a crossing actor instead of discharging the requirement through slack alone.
++
++\textit{Derivation of $\alpha_i$.} The coefficient $\alpha_i$ is the sensitivity of $h_i$ to the chosen ego acceleration $a_t$. This sensitivity has two channels: (i) the direct kinematic shift in relative position over $\Delta t$, and (ii) the change in closing speed induced by $a_t$, which feeds back into the braking-margin term of $h_i$. We linearize using channel (i) only, giving $\alpha_i = -\tfrac{1}{2}\bar\eta_i \Delta t^2$, and treat channel (ii) as a zero-order hold, evaluated at the current closing speed rather than expanded into the coefficient. This is a deliberate one-step approximation rather than an omission: because the filter replans every $\Delta t{=}0.2$\,s, any error from holding the closing speed fixed within one step is corrected at the next decision when $h_i$ is recomputed from the actor's realized velocity, following the same receding-horizon argument used to justify one-step linearizations in MPC-CBF filters more broadly. Section~\ref{results} reports how often this approximation is actually load-bearing, via the measured slack-activation rate.
++
+ An important detail of the implementation is that the barrier $h_i$ uses the nonnegative closing speed $v_i^{\text{close}}$ (so receding actors contribute zero braking penalty), while the QP coefficient $\beta_i$ uses the signed velocity $v_i^{\text{los}}$ (so receding actors actively relax the constraint). This asymmetry is deliberate: it prevents the barrier from becoming artificially negative for non-threatening actors while allowing the QP to account for the full relative dynamics correctly.
+ 
+ We solve QP with OSQP\cite{stellato2020osqp}. If the solver fails, or if no actor remains after range- and path-aware filtering, the nominal command is used directly. After solving, the safe desired speed is obtained from the QP-optimal acceleration $a_t^{*}$:
+@@ -140,7 +153,7 @@
+ 1, & d_i \le d_{\text{col}},
+ \end{cases}
+ \end{equation}
+-where $d_{\text{warn}}$ is a proximity warning distance beyond which no cost accrues (distinct from the CBF safe distance $d_i^{\text{safe}}$), and $d_{\text{col}}$ is the approximate collision-contact distance.
++where $d_{\text{warn}}=10.0$\,m is a proximity warning distance beyond which no cost accrues (distinct from the CBF safe distance $d_i^{\text{safe}}$), and $d_{\text{col}}=2.5$\,m is the approximate collision-contact distance.
+ 
+ 
+ \textbf{Time-to-collision cost.} A linear ramp based on how soon contact would occur at the current closing speed:
+@@ -148,7 +161,7 @@
+ \text{TTC}_i &= \frac{d_i}{v_i^{\text{close}} + \varepsilon}, \\
+ c_i^{\text{ttc}} &= \max\!\left(0,\; 1 - \frac{\text{TTC}_i}{\tau_{\text{ttc}}}\right).
+ \end{align}
+-Here $\tau_{\text{ttc}}$ is a time-to-collision horizon; the cost is zero when $\text{TTC}_i \ge \tau_{\text{ttc}}$ (actor receding or far away) and increases toward 1 as imminent contact approaches.
++Here $\tau_{\text{ttc}}=3.0$\,s is a time-to-collision horizon; the cost is zero when $\text{TTC}_i \ge \tau_{\text{ttc}}$ (actor receding or far away) and increases toward 1 as imminent contact approaches.
+ 
+ 
+ The cost of decision-step aggregates across all actors by taking the worst case:
+
+############################################################
+### 4_Setup_Design.tex
+############################################################
+--- /tmp/claude-1026/-home-henaparween-mars-lab-V2Xverse/e1aa3ec5-681d-4e88-aeef-e3e95a0353eb/scratchpad/original_zip_extract/4_Setup_Design.tex	2026-08-30 23:15:38.000000000 -0500
++++ /home/henaparween/mars_lab/V2Xverse-ASRL/paper_revision/2027_ICRA_Cooperative_Driving/4_Setup_Design.tex	2026-08-30 18:04:38.530509605 -0500
+@@ -51,6 +51,8 @@
+ Min / max acceleration     & $a_{\min},a_{\max}$ & $-8.0$\,/\,4.0\,m/s\textsuperscript{2} \\
+ Slack penalty              & $w_s$             & 1000 \\
+ Control interval           & $\Delta t$        & 0.2\,s \\
++Alignment floor            & $\eta_{\text{floor}}$ & 0.15 \\
++Max actor accel.\ bound    & $a_i^{\max}$      & 3.0\,m/s\textsuperscript{2} \\
+ \midrule
+ \multicolumn{3}{l}{\textit{Path-aware actor gating}} \\
+ \midrule
+@@ -111,11 +113,40 @@
+ \textbf{Fixed CBF}: CBF-QP with constant $\gamma_v{=}\gamma_p{=}\gamma_b{=}0.5$, selected based on preliminary experiments that indicated that this value balanced safety and route completion.
+     %\item 
+     
+-\textbf{Adaptive CBF}: CBF-QP with class-specific $\gamma$ values in $[0.05,0.8]$ selected per step by the trained RL policy. The evaluation checkpoint is the best saved checkpoint selected by the highest driving score, with ties broken by fewer collisions per route and then higher route completion.
++\textbf{Adaptive CBF}: CBF-QP with class-specific $\gamma$ values in $[0.05,0.8]$ selected per step by the trained RL policy.
+ %\end{enumerate}
+ 
++\subsubsection{Checkpoint Selection}
++\label{sec:checkpoint-selection}
++The checkpoint underlying the results reported in Section~\ref{results} was selected using the evaluator's original best-checkpoint logic, which scored candidate checkpoints against cumulative statistics computed over the same route pool used for final reporting, rather than a disjoint held-out set. We have since corrected this: candidate checkpoints are now scored only against a designated validation subset of routes, held out from both the training rollout stream and the final test set, before a checkpoint is selected for reporting. This validation-gating fix is implemented and verified on synthetic checkpoint records, but regenerating the headline checkpoint under the corrected procedure requires a full retraining run, which was not completed in time for this submission. We report this directly rather than leave it unstated, and treat producing a validation-selected checkpoint as the top priority for the next iteration of this work.
++
+ %------------------------------------------------------------------
+ \subsection{Evaluation Protocol and Metrics}
+ %------------------------------------------------------------------
+ 
+-All methods are evaluated in deterministic mode (mean policy action) on the same Town05 routes with fixed random seeds. Multiple passes per method account for the residual nondeterminism of CARLA. We report the CARLA driving score (route completion penalized by infractions), the route score (mean percentage of route completed), the route completion rate (fraction of trials where the full route was finished), collisions per route and per kilometer (split by actor class: vehicle, bicycle, pedestrian, static) and the collision-free route fraction. A method is considered an improvement if it reduces collision rates without a proportional loss in route completion.
+\ No newline at end of file
++All methods are evaluated in deterministic mode (mean policy action) on the same Town05 routes with fixed random seeds. Multiple passes per method account for the residual nondeterminism of CARLA. We report the standard CARLA leaderboard driving score,
++\begin{equation}
++\text{score} = \text{score}_{\text{route}} \times \text{score}_{\text{penalty}},
++\end{equation}
++where $\text{score}_{\text{route}}$ is the percentage of the route completed and $\text{score}_{\text{penalty}}$ starts at 1.0 and is multiplied by a fixed weight for every infraction incurred: $\times0.50$ for a pedestrian collision, $\times0.60$ for a vehicle collision, $\times0.65$ for a static-object collision, $\times0.70$ for running a red light, $\times0.80$ for a stop-sign violation, and a factor scaled by the percentage of the route driven outside the lane for off-route driving. We additionally report the route score, the route completion rate (fraction of trials where the full route was finished), collisions per route and per kilometer (split by actor class: vehicle, bicycle, pedestrian, static), and the collision-free route fraction. A method is considered an improvement if it reduces collision rates without a proportional loss in route completion.
++
++%------------------------------------------------------------------
++\subsection{Additional Ablations and Robustness Probes}
++\label{sec:additional-ablations}
++%------------------------------------------------------------------
++
++Beyond the three-way baseline comparison above, we conduct the following additional experiments, with results reported in Section~\ref{results}.
++
++\textbf{Fixed-gain sensitivity sweep.} We evaluate the fixed-CBF baseline at eight values, $\gamma \in \{0.1, 0.2, \dots, 0.8\}$, each over the full 105-route Town05 set, to test whether the adaptive policy's advantage depends on an unfavorable choice of static gain.
++
++\textbf{Cross-map generalization.} The trained adaptive policy is evaluated zero-shot, with no retraining, on two towns never seen during training or the main evaluation: Town07 (42 trials) and Town10 (27 trials).
++
++\textbf{Collaboration ablation.} We re-evaluate the identical trained safety layer wrapped around V2Xverse's single-agent (\texttt{no\_collaboration}) perception-planning checkpoint in place of the collaborative \texttt{codriving} checkpoint, holding the safety layer fixed, over the full 105-route set. The CBF filter and RL policy observation are built from ground-truth CARLA actor state rather than either perception model's own detections, so this isolates the upstream planner's use of collaboration rather than the safety layer's own dependence on it.
++
++\textbf{Rule-based scheduler baseline.} We compare against a hand-designed, non-learned $\gamma$ scheduler that ramps linearly with time-to-collision per actor class, requiring no training or checkpoint, over the full 105-route set.
++
++\textbf{Class-specific vs.\ shared gain.} A full ablation would retrain a policy constrained to a single shared $\gamma$ across all actor classes. As a lower-cost, training-free proxy, we instead log the trained class-specific policy's three per-class gains over a 20-route subset and measure how much they diverge from one another in deployment, which is suggestive of reliance on class-specific information but does not establish that a shared-gain policy would perform worse if trained under that constraint.
++
++\textbf{Observation-space sensitivity.} As a similarly training-free proxy for an observation-space ablation, we mask the heading-alignment features from the trained policy's input at inference time (on the same 20-route subset) and measure the resulting change in driving performance. As with the class-specific-gain proxy, this measures the deployed policy's sensitivity to losing an input it was trained to expect, which is not equivalent to training a policy that never had access to that feature.
++
++\textbf{Traffic density and V2X robustness.} On a 20-route subset, we evaluate the adaptive policy under $1.5\times$ denser background traffic, under injected V2X communication latency (400\,ms), and under injected collaborative-perception pose noise ($\sigma_{\text{pos}}=\sigma_{\text{rot}}=0.2$), each individually, to probe sensitivity to conditions beyond the default evaluation setting. These are single-condition probes at one severity level rather than full sweeps.
+\ No newline at end of file
+
+############################################################
+### 5_Results.tex
+############################################################
+--- /tmp/claude-1026/-home-henaparween-mars-lab-V2Xverse/e1aa3ec5-681d-4e88-aeef-e3e95a0353eb/scratchpad/original_zip_extract/5_Results.tex	2026-08-30 23:15:38.000000000 -0500
++++ /home/henaparween/mars_lab/V2Xverse-ASRL/paper_revision/2027_ICRA_Cooperative_Driving/5_Results.tex	2026-08-30 18:05:23.010509492 -0500
+@@ -114,4 +114,112 @@
+   \label{fig:infraction-breakdown}
+ \end{figure}
+ 
++%------------------------------------------------------------------
++\subsection{Execution Time and Constraint Activation}
++\label{sec:solve-time}
++%------------------------------------------------------------------
++
++Across the full evaluation matrix ($\sim$42k decision steps per method), the OSQP solve for a single decision step averages $0.017$\,ms (95th percentile $0.041$\,ms, maximum $<\!1.1$\,ms), against the $200$\,ms budget imposed by the $5$\,Hz decision rate -- solve time consumes under $0.02\%$ of the available budget on average, well within real-time requirements even in dense traffic. The QP's slack variable is active on $30.4\%$ of decision steps for the fixed-gain baseline and $35.2\%$ for the adaptive policy, indicating the soft constraint is exercised regularly rather than only in rare edge cases; the solver never fell back to the nominal (unfiltered) command in either case ($0.0\%$ fallback rate across both methods), so feasibility was never lost even under the one-step linearization discussed in Section~\ref{methods}.
++
++%------------------------------------------------------------------
++\subsection{Fixed-Gain Sensitivity Sweep}
++\label{sec:gamma-sweep}
++%------------------------------------------------------------------
++
++Table~\ref{tab:gamma-sweep} sweeps the fixed-CBF gain across its full configured range. The eight fixed-gain points span only $66.55$--$71.75$, a band narrower than any individual point's own 95\% CI ($\pm6.2$--$6.6$) -- no fixed gain is statistically distinguishable from any other, indicating the fixed-CBF baseline was not tuned to an unfavorable operating point. At matched sample size ($\gamma{=}0.5$ vs.\ adaptive, both $n{=}315$), the adaptive policy's advantage is real but modest: $75.81\pm3.35$ vs.\ $67.39\pm3.58$, confidence intervals barely non-overlapping. Fig.~\ref{fig:gamma-pareto} plots this as a Pareto frontier.
++
++\begin{table}[!htbp]
++\centering
++\caption{Fixed-CBF gamma sensitivity sweep, Town05 ($n{=}105$ per point except $\gamma{=}0.5$, $n{=}315$).}
++\label{tab:gamma-sweep}
++{\scriptsize
++\setlength{\tabcolsep}{4pt}
++\begin{tabular}{lcccc}
++\toprule
++$\gamma$ & Score & 95\% CI & Compl. & Coll./km \\
++\midrule
++0.1 & 67.76 & 6.51 & 90.5\% & 10.76 \\
++0.2 & 69.64 & 6.23 & 88.6\% & 8.98 \\
++0.3 & 67.55 & 6.22 & 88.6\% & 8.95 \\
++0.4 & 71.75 & 6.31 & 86.7\% & 8.49 \\
++0.5 & 67.39 & 3.58 & 88.3\% & 9.56 \\
++0.6 & 66.57 & 6.65 & 86.7\% & 11.46 \\
++0.7 & 70.54 & 6.42 & 89.5\% & 9.42 \\
++0.8 & 66.55 & 6.62 & 89.5\% & 10.43 \\
++\textbf{Adaptive} & \textbf{75.81} & 3.35 & 90.8\% & 6.75 \\
++\bottomrule
++\end{tabular} }
++\end{table}
++
++\begin{figure}[!htbp]
++  \centering
++  \includegraphics[width=0.9\columnwidth]{figures/pareto_score_vs_collisions.png}
++  \caption{Fixed-CBF gamma sweep: score vs.\ collision rate, adaptive CBF shown as reference.}
++  \label{fig:gamma-pareto}
++\end{figure}
++
++%------------------------------------------------------------------
++\subsection{Cross-Map Generalization}
++\label{sec:generalization}
++%------------------------------------------------------------------
++
++Table~\ref{tab:generalization} evaluates the frozen trained policy zero-shot on two held-out towns. The CBF-vs-no-CBF safety benefit holds cleanly across all three towns: PID-only's collision rate rises sharply out of distribution ($35.58\rightarrow99.57\rightarrow66.13$ per km) while both CBF variants remain in a comparatively narrow band. The adaptive-over-fixed advantage observed on Town05, however, does not generalize: the two are statistically indistinguishable on Town07, and fixed CBF outperforms the adaptive policy on Town10 on both score and collision rate. We report this directly: the safety-layer concept generalizes, but the specific claim that adaptive scheduling outperforms a well-tuned fixed gain is currently supported only in-distribution.
++
++\begin{table}[!htbp]
++\centering
++\caption{Cross-map generalization, zero-shot (no retraining).}
++\label{tab:generalization}
++{\scriptsize
++\setlength{\tabcolsep}{4pt}
++\begin{tabular}{lccc}
++\toprule
++Method & Town05 ($n{=}315$) & Town07 ($n{=}42$) & Town10 ($n{=}27$) \\
++\midrule
++PID-only score      & 45.47$\pm$4.4  & 23.46$\pm$9.8 & 17.33$\pm$11.4 \\
++Fixed CBF score      & 67.39$\pm$3.6  & 71.50$\pm$8.2 & 43.27$\pm$12.6 \\
++Adaptive CBF score   & 75.81$\pm$3.4  & 72.86$\pm$8.9 & 38.41$\pm$12.6 \\
++\midrule
++PID-only coll./km    & 35.58 & 99.57 & 66.13 \\
++Fixed CBF coll./km   & 9.56  & 9.50  & 14.37 \\
++Adaptive CBF coll./km& 6.75  & 9.26  & 20.97 \\
++\bottomrule
++\end{tabular} }
++\end{table}
++
++%------------------------------------------------------------------
++\subsection{Ablation Studies}
++\label{sec:ablations}
++%------------------------------------------------------------------
++
++\textbf{Collaboration ablation.} Wrapping the identical safety layer around the single-agent (\texttt{no\_collaboration}) perception-planning checkpoint scores $67.57\pm6.52$, $89.5\%$ completion, $10.91$ collisions/km ($n{=}105$), versus $75.81\pm3.35$, $90.8\%$, $6.75$ with collaborative perception. The safety layer still delivers a large improvement over the unfiltered baseline without collaboration, but collaborative perception provides a further, meaningful benefit on top of it -- the reported gains are not solely an artifact of collaboration.
++
++\textbf{Rule-based scheduler baseline.} Table~\ref{tab:rule-based} compares the hand-designed TTC-ramp scheduler against the other three methods. The ordering is monotonic on both score and collision rate: rule-based clearly beats no safety layer, but underperforms even the simplest fixed-gain CBF, and more so the learned adaptive policy -- the learned policy earns its added complexity over a simple hand-tuned rule.
++
++\begin{table}[!htbp]
++\centering
++\caption{Rule-based (non-learned) gamma-scheduler baseline, Town05.}
++\label{tab:rule-based}
++{\scriptsize
++\setlength{\tabcolsep}{4pt}
++\begin{tabular}{lcccc}
++\toprule
++Method & $n$ & Score & Compl. & Coll./km \\
++\midrule
++PID-only        & 315 & 45.47$\pm$4.41 & 90.2\% & 35.58 \\
++Rule-based CBF  & 105 & 64.46$\pm$6.76 & 89.5\% & 12.80 \\
++Fixed CBF       & 315 & 67.39$\pm$3.58 & 88.3\% & 9.56 \\
++Adaptive CBF    & 315 & 75.81$\pm$3.35 & 90.8\% & 6.75 \\
++\bottomrule
++\end{tabular} }
++\end{table}
++
++\textbf{Class-specific gain and observation-space proxies.} These are training-free proxies, not controlled ablations (Section~\ref{sec:additional-ablations}); we report them as such. Logging the trained policy's three gains over 6{,}485 decision steps shows they do not converge to a shared value: mean pairwise gaps of $0.60$--$0.63$ between the pedestrian gain and the other two classes, with $0\%$ of steps landing all three gains within even $0.10$ of each other -- the deployed policy clearly exploits class-specific freedom, particularly for pedestrians, though this does not establish that a policy trained under a shared-gain constraint could not perform comparably. One class's mean gain ($\gamma_v{=}0.800$, the top of the configured range) has exactly zero measured variance across all logged steps, which we note as a possible sign that this action dimension saturated during training rather than learning to differentiate, and flag as worth further investigation rather than presenting as a clean result. Separately, masking the heading-alignment features at inference dropped mean score from $67.73$ to $63.10$ and raised collisions from 14 to 18 over the same 20 routes, a real but noisy effect (6 routes worse, 4 better, 10 unchanged) consistent with the policy relying on this feature to some degree, though it cannot separate that from sensitivity to an out-of-distribution input.
++
++%------------------------------------------------------------------
++\subsection{Traffic Density and V2X Robustness}
++\label{sec:robustness}
++%------------------------------------------------------------------
++
++On a 20-route subset (baseline: score $67.73$, $95\%$ completion, 14 collisions), $1.5\times$ denser traffic reduces the adaptive policy to score $61.09$, $70\%$ completion, 18 collisions -- a real degradation under harder conditions, as expected. Injected V2X communication latency ($400$\,ms) and collaborative-perception pose noise ($\sigma_{\text{pos}}{=}\sigma_{\text{rot}}{=}0.2$), tested individually, did not degrade score relative to baseline ($69.23$ and $73.42$ respectively). We report this as a single data point per condition rather than a sweep to a breaking point, and do not claim broad robustness from it alone.
++
+ \FloatBarrier
+\ No newline at end of file
+
+############################################################
+### 6_Conclusion.tex
+############################################################
+--- /tmp/claude-1026/-home-henaparween-mars-lab-V2Xverse/e1aa3ec5-681d-4e88-aeef-e3e95a0353eb/scratchpad/original_zip_extract/6_Conclusion.tex	2026-08-30 23:15:38.000000000 -0500
++++ /home/henaparween/mars_lab/V2Xverse-ASRL/paper_revision/2027_ICRA_Cooperative_Driving/6_Conclusion.tex	2026-08-30 18:05:37.556509456 -0500
+@@ -9,4 +9,4 @@
+ 
+ Overall, these results support the central claim of the paper: learning to schedule barrier gains online can improve safety without sacrificing route progress. More broadly, they show that meaningful safety improvements can come from a targeted control-layer intervention rather than a full redesign of the autonomy stack.
+ 
+-The current safety layer modifies only longitudinal control. Extending the framework to jointly regulate longitudinal and lateral actions is a natural next step, though it requires a coupled vehicle model and richer barrier construction. Even with this limitation, the approach is practical as a drop-in safety adapter for existing autonomy stacks and complements continued advances in collaborative perception and planning.
++\textbf{Limitations.} Our formulation does not provide a formal forward-invariance guarantee. The slack variable in the QP admits soft constraint violation when the problem would otherwise be infeasible, and we measure it as active on $30$--$35\%$ of decision steps (Section~\ref{sec:solve-time}); the solver never fell back to the nominal command, but this means the safety property is empirical rather than certified. We bound, rather than eliminate, the risk from the constant-velocity actor assumption via a worst-case acceleration margin (Section~\ref{methods}), and our barrier formulation acts on longitudinal motion only: extending the framework to jointly regulate longitudinal and lateral actions is a natural next step, requiring a coupled vehicle model and richer barrier construction. The checkpoint underlying our headline result predates the checkpoint-selection methodology fix described in Section~\ref{sec:checkpoint-selection}; producing a validation-selected headline result is the top priority for future work. Finally, three additional ablations explicitly called for could not be completed with a trained policy in this revision cycle and remain future work: class-specific-vs-shared-gain and cost-function-weighting variants, and a PID-Lagrangian-vs-plain-Lagrangian comparison -- each requires training a separate policy under the corresponding constraint, which we substituted where possible with training-free proxies on the existing policy (Section~\ref{sec:ablations}) rather than presenting as equivalent evidence. Even with these limitations, the approach is practical as a drop-in safety adapter for existing autonomy stacks and complements continued advances in collaborative perception and planning.
+

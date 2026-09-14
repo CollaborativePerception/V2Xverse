@@ -1,0 +1,123 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%2345678901234567890123456789012345678901234567890123456789012345678901234567890
+%        1         2         3         4         5         6         7         8
+
+\documentclass[letterpaper, 10 pt, conference]{ieeeconf}  % Comment this line out if you need a4paper. IROS conference - luki 3/2026
+
+%\documentclass[a4paper, 10pt, conference]{ieeeconf}      % Use this line for a4 paper
+
+\IEEEoverridecommandlockouts                              % This command is only needed if 
+                                                          % you want to use the \thanks command
+
+\overrideIEEEmargins                                      % Needed to meet printer requirements.
+
+%In case you encounter the following error:
+%Error 1010 The PDF file may be corrupt (unable to open PDF file) OR
+%Error 1000 An error occurred while parsing a contents stream. Unable to analyze the PDF file.
+%This is a known problem with pdfLaTeX conversion filter. The file cannot be opened with acrobat reader
+%Please use one of the alternatives below to circumvent this error by uncommenting one or the other
+%\pdfobjcompresslevel=0
+%\pdfminorversion=4
+
+% See the \addtolength command later in the file to balance the column lengths
+% on the last page of the document
+
+% The following packages can be found on http:\\www.ctan.org
+%\usepackage{graphics} % for pdf, bitmapped graphics files
+%\usepackage{epsfig} % for postscript graphics files
+%\usepackage{mathptmx} % assumes new font selection scheme installed
+%\usepackage{times} % assumes new font selection scheme installed
+\usepackage{amsmath} % assumes amsmath package installed
+\usepackage{amssymb}  % assumes amsmath package installed
+\usepackage{graphicx}
+\usepackage{comment}
+\usepackage{subfig} % qilu 01/29/2024 make it possible to include more than one captioned figure/table in a single float
+\usepackage{multicol}
+ \usepackage{booktabs}
+ \usepackage[section]{placeins}
+\usepackage{tikz}
+ \usepackage{makecell}
+\usetikzlibrary{arrows.meta, positioning}
+\usepackage[hidelinks]{hyperref}
+
+\usepackage{xcolor}
+\usepackage{censor}
+
+\title{\LARGE \bf
+Adaptive Control Barrier Functions for Collaborative Autonomous Driving
+}
+
+\author{
+Fabian Hernandez$^1$, Hena Parween xx?, Sara Mahjabin xx?, and Qi Lu$^2$ % <-this % stops a space
+\thanks{*This work was not supported by any organization}% <-this % stops a space
+\thanks{$^1$The Department of Computer Science,
+        The University of Texas at Rio Grande Valley, Edinburg, USA
+        {\tt\small fabian.hernandez04@utrgv.edu}}
+\thanks{$^2$The Department of Computer Science, The University of Texas at Rio Grande Valley, Edinburg, TX, USA
+        {\tt\small qi.lu@utrgv.edu}}
+}
+
+%\author{Albert Author$^{1}$ and Bernard D. Researcher$^{2}$% <-this % stops a space
+%\thanks{*This work was not supported by any organization}% <-this % stops a space
+%\thanks{$^{1}$Albert Author is with Faculty of Electrical Engineering, Mathematics and Computer Science,
+%        University of Twente, 7500 AE Enschede, The Netherlands
+%        {\tt\small albert.author@papercept.net}}%
+%\thanks{$^{2}$Bernard D. Researcheris with the Department of Electrical Engineering, Wright State University,
+%        Dayton, OH 45435, USA
+%        {\tt\small b.d.researcher@ieee.org}}%
+%}
+
+\begin{document}
+
+
+
+\maketitle
+\thispagestyle{empty}
+\pagestyle{empty}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{abstract}
+Connected autonomous vehicles improve urban driving through collaborative perception enabled by Vehicle-to-Everything (V2X) communication. Frameworks such as V2Xverse use this collaboration to strengthen perception and planning, but their downstream controllers operate with fixed parameters that cannot adapt to changing traffic conditions. A Control Barrier Function (CBF) can enforce safety at the control level by filtering unsafe commands, but a fixed barrier gain forces the system into a single operating point for all scenarios. Conservative settings unnecessarily slow the vehicle, while permissive settings do not react in time to rapidly developing hazards. This paper introduces an adaptive safety layer that learns to schedule barrier gains online using constrained reinforcement learning. A compact policy, with roughly 10 thousand parameters, observes a low-dimensional summary of the ego state and the nearest vehicle, pedestrian, and bicycle, and outputs a separate gain for each actor class at every decision step. These gains parameterize a quadratic-program safety filter that adjusts only longitudinal control, while collaborative perception, planning, and steering remain entirely unchanged. Training uses a constrained policy optimization approach with a PID-based Lagrangian multiplier that balances route progress against a cumulative safety cost budget, keeping the two objectives separate rather than folding them into a single reward. We evaluated 315 closed-loop trials across 105 routes in CARLA Town05, comparing the adaptive policy against an unfiltered PID baseline and a fixed-gain CBF filter under identical perception and planning. The adaptive method achieves the highest driving score of 75.81, and reduces collisions per route by 80.3\% relative to the unfiltered baseline and by 25.9\% relative to the fixed CBF filter, and increases the collision-free route rate to 59.7\% while maintaining the best route completion at 90.8\%. The greatest improvements appear for vulnerable road users, with bicycle collisions dropping by 87.7\% and pedestrian collisions by 54.5\% compared to the unfiltered baseline. Because the upstream stack is never modified, all observed improvements are attributable solely to the adaptive safety layer, supporting its portability and ease of integration into other collaborative driving platforms.
+
+\end{abstract}
+
+
+%\begin{IEEEkeywords}
+%Swarm Robotics, Intrusion Detection, Foraging Robots, Pheromone Trails, Security in Robotics
+%\end{IEEEkeywords}
+
+\input{1_Introduction}
+\input{2_Related_work}
+\input{3_Method}
+\input{4_Setup_Design}
+\input{5_Results}
+\input{6_Conclusion}
+
+                                  % sure that you do not shorten the textheight too much.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\section*{APPENDIX}
+
+%Appendixes should appear before the acknowledgment.
+
+\section*{ACKNOWLEDGMENT}
+%The authors acknowledge funding from NSF CREST Center for Multidisciplinary Research Excellence in Cyber-Physical Infrastructure Systems (No. 2112650). NSF CISE MSI programs (No. 2318682 $\&$ 2431569) and NSF CISE Expand AI Program (No. 2434916).
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%References are important to the reader; therefore, each citation must be complete and correct. If at all possible, references should be commonly available publications.
+
+\bibliographystyle{IEEEtran}
+\bibliography{BibFiles/IEEEabrv, BibFiles/main_ref}
+
+\end{document}

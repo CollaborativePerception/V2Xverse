@@ -35,6 +35,7 @@ class CRPOTrainer(object):
         pid_gains=(1.0, 0.1, 0.1),
         pid_ema_alpha=0.95,
         pid_d_delay=1,
+        dual_lr=0.01,
         hidden_sizes=(64, 64),
         log_dir=None,
         save_every=10,
@@ -73,6 +74,7 @@ class CRPOTrainer(object):
         self.kp, self.ki, self.kd = pid_gains
         self.pid_ema_alpha = pid_ema_alpha
         self.pid_d_delay = pid_d_delay
+        self.dual_lr = dual_lr
         self.lagrange_mult = lagrange_mult
         self.lagrange_mult_max = lagrange_mult_max
         self.cost_limit = cost_limit
@@ -315,6 +317,13 @@ class CRPOTrainer(object):
             self.lagrange_mult = self.kp * self.ema_p + self.ki * self.p_int + self.kd * p_der
             self.lagrange_mult = max(0.0, min(self.lagrange_mult, self.lagrange_mult_max))
         else:
+            # Plain dual gradient ascent (Eq. 3.12 in the thesis background chapter):
+            # lambda <- max(0, lambda + dual_lr * (avg_cost - cost_limit)). Previously
+            # this branch only re-clipped the existing multiplier without ever updating
+            # it, so use_pid_lagrangian=False silently froze lambda at its initial value
+            # for the whole run instead of providing a real non-PID baseline.
+            avg_cost = float(costs.mean().item()) if costs.numel() > 0 else 0.0
+            self.lagrange_mult = self.lagrange_mult + self.dual_lr * (avg_cost - self.cost_limit)
             self.lagrange_mult = max(0.0, min(self.lagrange_mult, self.lagrange_mult_max))
 
         # PPO updates

@@ -1,0 +1,149 @@
+\begin{thebibliography}{10}
+\providecommand{\url}[1]{#1}
+\csname url@rmstyle\endcsname
+\providecommand{\newblock}{\relax}
+\providecommand{\bibinfo}[2]{#2}
+\providecommand\BIBentrySTDinterwordspacing{\spaceskip=0pt\relax}
+\providecommand\BIBentryALTinterwordstretchfactor{4}
+\providecommand\BIBentryALTinterwordspacing{\spaceskip=\fontdimen2\font plus
+\BIBentryALTinterwordstretchfactor\fontdimen3\font minus
+  \fontdimen4\font\relax}
+\providecommand\BIBforeignlanguage[2]{{%
+\expandafter\ifx\csname l@#1\endcsname\relax
+\typeout{** WARNING: IEEEtran.bst: No hyphenation pattern has been}%
+\typeout{** loaded for the language `#1'. Using the pattern for}%
+\typeout{** the default language instead.}%
+\else
+\language=\csname l@#1\endcsname
+\fi
+#2}}
+
+\bibitem{han2023collaborative}
+Y.~Han, H.~Zhang, H.~Li, Y.~Jin, C.~Lang, and Y.~Li, ``Collaborative perception
+  in autonomous driving: Methods, datasets, and challenges,'' \emph{IEEE
+  Intelligent Transportation Systems Magazine}, vol.~15, no.~6, pp. 131--151,
+  2023.
+
+\bibitem{huang2023v2xsurvey}
+T.~Huang, J.~Liu, X.~Zhou, D.~C. Nguyen, M.~Rahimi~Azghadi, Y.~Xia, Q.-L. Han,
+  and S.~Sun, ``Vehicle-to-everything cooperative perception for autonomous
+  driving,'' \emph{Proceedings of the IEEE}, vol. 113, no.~5, pp. 443--477,
+  2025.
+
+\bibitem{teufel2024collective}
+S.~Teufel, J.~Gamerdinger, J.-P. Kirchner, G.~Volk, and O.~Bringmann,
+  ``Collective perception datasets for autonomous driving: A comprehensive
+  review,'' in \emph{2024 IEEE Intelligent Vehicles Symposium (IV)}, 2024, pp.
+  1548--1555.
+
+\bibitem{wang2020v2vnet}
+T.-H. Wang, S.~Manivasagam, M.~Liang, B.~Yang, W.~Zeng, and R.~Urtasun,
+  ``V2vnet: Vehicle-to-vehicle communication for joint perception and
+  prediction,'' in \emph{Computer Vision – ECCV 2020: 16th European
+  Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part II}.\hskip
+  1em plus 0.5em minus 0.4em\relax Berlin, Heidelberg: Springer-Verlag, 2020,
+  p. 605–621.
+
+\bibitem{HuEtAl2022}
+Y.~Hu, S.~Fang, Z.~Lei, Y.~Zhong, and S.~Chen, ``Where2comm:
+  communication-efficient collaborative perception via spatial confidence
+  maps,'' in \emph{Proceedings of the 36th International Conference on Neural
+  Information Processing Systems}, ser. NIPS '22.\hskip 1em plus 0.5em minus
+  0.4em\relax Red Hook, NY, USA: Curran Associates Inc., 2022.
+
+\bibitem{liu2024v2xverse}
+G.~Liu, Y.~Hu, C.~Xu, W.~Mao, J.~Ge, Z.~Huang, Y.~Lu, Y.~Xu, J.~Xia, Y.~Wang,
+  and S.~Chen, ``Toward collaborative autonomous driving: Simulation platform
+  and end-to-end system,'' \emph{IEEE Transactions on Pattern Analysis and
+  Machine Intelligence}, vol.~47, no.~8, pp. 6566--6584, 2025.
+
+\bibitem{ames2017cbf}
+A.~D. Ames, X.~Xu, J.~W. Grizzle, and P.~Tabuada, ``Control barrier function
+  based quadratic programs for safety critical systems,'' \emph{IEEE
+  Transactions on Automatic Control}, vol.~62, no.~8, pp. 3861--3876, 2017.
+
+\bibitem{ames_control_2019}
+A.~D. Ames, S.~Coogan, M.~Egerstedt, G.~Notomista, K.~Sreenath, and P.~Tabuada,
+  ``Control barrier functions: Theory and applications,'' in \emph{2019 18th
+  European Control Conference (ECC)}, 2019, pp. 3420--3431.
+
+\bibitem{berducci2024las}
+L.~Berducci, S.~Yang, R.~Mangharam, and R.~Grosu, ``Learning adaptive safety
+  for multi-agent systems,'' in \emph{2024 IEEE International Conference on
+  Robotics and Automation (ICRA)}, 2024, pp. 2859--2865.
+
+\bibitem{schulman2017ppo}
+J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov, ``Proximal
+  policy optimization algorithms,'' \emph{openai}, 2017.
+
+\bibitem{stooke2020pid}
+A.~Stooke, J.~Achiam, and P.~Abbeel, ``Responsive safety in reinforcement
+  learning by pid lagrangian methods,'' in \emph{Proceedings of the 37th
+  International Conference on Machine Learning}, ser. ICML'20.\hskip 1em plus
+  0.5em minus 0.4em\relax JMLR.org, 2020.
+
+\bibitem{chen2019fcooper}
+Q.~Chen, X.~Ma, S.~Tang, J.~Guo, Q.~Yang, and S.~Fu, ``F-cooper: feature based
+  cooperative perception for autonomous vehicle edge computing system using 3d
+  point clouds,'' in \emph{Proceedings of the 4th ACM/IEEE Symposium on Edge
+  Computing}, ser. SEC '19.\hskip 1em plus 0.5em minus 0.4em\relax New York,
+  NY, USA: Association for Computing Machinery, 2019, p. 88–100.
+
+\bibitem{chen2019cooper}
+Q.~Chen, S.~Tang, Q.~Yang, and S.~Fu, ``Cooper: Cooperative perception for
+  connected autonomous vehicles based on 3d point clouds,'' in \emph{2019 IEEE
+  39th International Conference on Distributed Computing Systems (ICDCS)},
+  2019, pp. 514--524.
+
+\bibitem{cui2022coopernaut}
+J.~Cui, H.~Qiu, D.~Chen, P.~Stone, and Y.~Zhu, ``Coopernaut: End-to-end driving
+  with cooperative perception for networked vehicles,'' in \emph{IEEE/CVF
+  Conference on Computer Vision and Pattern Recognition (CVPR)}, 2022.
+
+\bibitem{nguyen2016ecbf}
+Q.~Nguyen and K.~Sreenath, ``Exponential control barrier functions for
+  enforcing high relative-degree safety-critical constraints,'' in \emph{2016
+  American Control Conference (ACC)}, 2016, pp. 322--328.
+
+\bibitem{zeng2021odcbf}
+J.~Zeng, B.~Zhang, Z.~Li, and K.~Sreenath, ``Safety-critical control using
+  optimal-decay control barrier functions with guaranteed point-wise
+  feasibility,'' 2021.
+
+\bibitem{taylor2020learningcbf}
+A.~Taylor, A.~Singletary, Y.~Yue, and A.~Ames, ``Learning for safety-critical
+  control with control barrier functions,'' in \emph{Proceedings of the 2nd
+  Conference on Learning for Dynamics and Control}, ser. Proceedings of Machine
+  Learning Research, vol. 120.\hskip 1em plus 0.5em minus 0.4em\relax PMLR,
+  10--11 Jun 2020, pp. 708--717.
+
+\bibitem{qin2021neuralbarrier}
+Z.~Qin, K.~Zhang, Y.~Chen, J.~Chen, and C.~Fan, ``Learning safe multi-agent
+  control with decentralized neural barrier certificates,'' in
+  \emph{International Conference on Learning Representations (ICLR)}, 2021.
+
+\bibitem{altman1999cmdp}
+E.~Altman, \emph{Constrained Markov Decision Processes}.\hskip 1em plus 0.5em
+  minus 0.4em\relax Chapman and Hall/CRC, 1999.
+
+\bibitem{garcia2015survey}
+J.~Garc\'{\i}a and F.~Fern\'{a}ndez, ``A comprehensive survey on safe
+  reinforcement learning,'' \emph{J. Mach. Learn. Res.}, vol.~16, no.~1, p.
+  1437–1480, Jan. 2015.
+
+\bibitem{achiam2017cpo}
+J.~Achiam, D.~Held, A.~Tamar, and P.~Abbeel, ``Constrained policy
+  optimization,'' in \emph{Proceedings of the 34th International Conference on
+  Machine Learning - Volume 70}, ser. ICML'17.\hskip 1em plus 0.5em minus
+  0.4em\relax JMLR.org, 2017, p. 22–31.
+
+\bibitem{ray2019safetygym}
+A.~Ray, J.~Achiam, and D.~Amodei, ``Benchmarking safe exploration in deep
+  reinforcement learning,'' 2019.
+
+\bibitem{stellato2020osqp}
+B.~Stellato, G.~Banjac, P.~Goulart, A.~Bemporad, and S.~Boyd, ``Osqp: An
+  operator splitting solver for quadratic programs,'' \emph{Mathematical
+  Programming Computation}, vol.~12, no.~4, pp. 637--672, 2020.
+
+\end{thebibliography}

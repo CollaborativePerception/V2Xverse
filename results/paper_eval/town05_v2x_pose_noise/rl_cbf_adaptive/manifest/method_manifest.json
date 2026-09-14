@@ -1,0 +1,46 @@
+{
+  "name": "rl_cbf_adaptive",
+  "base_agent_config": "/home/henaparween/mars_lab/V2Xverse-ASRL/simulation/leaderboard/team_code/agent_config/pnp_config_rl_cbf_2.yaml",
+  "effective_agent_config": "/home/henaparween/mars_lab/V2Xverse-ASRL/results/paper_eval/town05_v2x_pose_noise/rl_cbf_adaptive/manifest/agent_config_eval.yaml",
+  "pass_runs": [
+    {
+      "pass_index": 1,
+      "run_root": "/home/henaparween/mars_lab/V2Xverse-ASRL/results/paper_eval/town05_v2x_pose_noise/rl_cbf_adaptive/pass01",
+      "checkpoint_endpoint": "/home/henaparween/mars_lab/V2Xverse-ASRL/results/paper_eval/town05_v2x_pose_noise/rl_cbf_adaptive/pass01/eval/results.json",
+      "results_json": "/home/henaparween/mars_lab/V2Xverse-ASRL/results/paper_eval/town05_v2x_pose_noise/rl_cbf_adaptive/pass01/eval/ego_vehicle_0/results.json",
+      "resume": 0,
+      "existing_entry_status": "",
+      "command": [
+        "python",
+        "simulation/leaderboard/leaderboard/leaderboard_evaluator_rl.py",
+        "--host=localhost",
+        "--port=40000",
+        "--trafficManagerPort=40005",
+        "--trafficManagerSeed=2000",
+        "--carlaProviderSeed=2000",
+        "--debug=0",
+        "--record=",
+        "--timeout=600",
+        "--routes=simulation/leaderboard/data/evaluation_routes/town05_short_r0.xml",
+        "--route-id-start=0",
+        "--num-routes=20",
+        "--route-passes=1",
+        "--routes-dir=simulation/leaderboard/data/evaluation_routes",
+        "--routes-pattern=town05_short_r{}.xml",
+        "--reuse-agent=1",
+        "--route-id-max=331",
+        "--best-every=0",
+        "--scenarios=simulation/leaderboard/data/scenarios/town05_all_scenarios_2.json",
+        "--scenario_parameter=simulation/leaderboard/leaderboard/scenarios/scenario_parameter_2.yaml",
+        "--repetitions=1",
+        "--agent=simulation/leaderboard/team_code/pnp_agent_e2e.py",
+        "--agent-config=/home/henaparween/mars_lab/V2Xverse-ASRL/results/paper_eval/town05_v2x_pose_noise/rl_cbf_adaptive/manifest/agent_config_eval.yaml",
+        "--track=SENSORS",
+        "--resume=0",
+        "--checkpoint=/home/henaparween/mars_lab/V2Xverse-ASRL/results/paper_eval/town05_v2x_pose_noise/rl_cbf_adaptive/pass01/eval/results.json",
+        "--ego-num=1",
+        "--skip_existed=0"
+      ]
+    }
+  ]
+}

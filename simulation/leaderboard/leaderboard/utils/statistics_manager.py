@@ -204,28 +204,14 @@ class StatisticsManager(object):
 
         return route_record
 
-    def compute_global_statistics(self, total_routes, record_filter=None):
-        """
-        Aggregate route records into a single summary record.
-
-        record_filter: optional callable(route_record) -> bool. When given, only
-        matching records are aggregated and the average is taken over the number
-        of matching records (not `total_routes`) -- used to score a held-out
-        validation subset of routes separately from the full training stream
-        (see leaderboard_evaluator_rl.py::_maybe_save_best).
-        """
+    def compute_global_statistics(self, total_routes):
         global_record = RouteRecord()
         global_record.route_id = -1
         global_record.index = -1
         global_record.status = 'Completed'
 
-        records = self._registry_route_records
-        if record_filter is not None:
-            records = [r for r in records if record_filter(r)]
-            total_routes = max(1, len(records))
-
-        if records:
-            for route_record in records:
+        if self._registry_route_records:
+            for route_record in self._registry_route_records:
                 global_record.scores['score_route'] += route_record.scores['score_route']
                 global_record.scores['score_penalty'] += route_record.scores['score_penalty']
                 global_record.scores['score_composed'] += route_record.scores['score_composed']

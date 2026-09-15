@@ -1,4 +1,0 @@
-method,n_routes,n_trials,overall_mean_score,even_id_subset_mean,odd_id_subset_mean,subset_delta
-fixed_cbf,105,315,67.39,70.54,64.3,6.24
-rl_cbf_adaptive,105,315,75.81,78.32,73.35,4.97
-pid_only,105,315,45.47,42.66,48.23,-5.57

@@ -23,17 +23,11 @@ class CBFQPFilter:
         config = config or {}
         self.enabled = bool(config.get("enabled", False))
         self.max_distance = float(config.get("max_distance", 30.0))
-        self.margin = float(config.get("margin", 2.5))
+        self.margin = float(config.get("margin", 1.5))
         self.a_brake = float(config.get("a_brake", 6.0))
-        self.a_min = float(config.get("a_min", -8.0))
+        self.a_min = float(config.get("a_min", -6.0))
         self.a_max = float(config.get("a_max", 4.0))
         self.slack_weight = float(config.get("slack_weight", 1000.0))
-        # Worst-case actor acceleration (m/s^2) folded into the stopping-distance term;
-        # addresses the "actor acceleration silently ignored" IROS review concern.
-        self.actor_accel_max = float(config.get("actor_accel_max", 3.0))
-        # Minimum |eta_i| used in the QP coefficient once an actor is inside the
-        # danger zone; addresses the eta_i ~= 0 crossing-actor degeneracy (IROS R1 Q2).
-        self.eta_floor = float(config.get("eta_floor", 0.15))
         self.gamma_vehicle = float(config.get("gamma_vehicle", 0.5))
         self.gamma_ped = float(config.get("gamma_ped", 0.5))
         self.gamma_bike = float(config.get("gamma_bike", 0.5))
@@ -43,10 +37,10 @@ class CBFQPFilter:
         # Path-aware actor gating to avoid overreacting to adjacent/opposite lanes.
         self.actor_path_gating = bool(config.get("actor_path_gating", True))
         self.gate_rear_distance = float(config.get("gate_rear_distance", 2.0))
-        self.gate_lateral_distance = float(config.get("gate_lateral_distance", 2.5))
-        self.gate_lateral_speed_gain = float(config.get("gate_lateral_speed_gain", 0.04))
+        self.gate_lateral_distance = float(config.get("gate_lateral_distance", 2.6))
+        self.gate_lateral_speed_gain = float(config.get("gate_lateral_speed_gain", 0.0))
         self.gate_enable_crossing = bool(config.get("gate_enable_crossing", True))
-        self.gate_crossing_ttc = float(config.get("gate_crossing_ttc", 3.2))
+        self.gate_crossing_ttc = float(config.get("gate_crossing_ttc", 2.5))
         self.gate_crossing_forward = float(config.get("gate_crossing_forward", 12.0))
         self.gate_crossing_rear = float(config.get("gate_crossing_rear", 2.0))
 
@@ -89,7 +83,7 @@ class CBFQPFilter:
         desired_speed: float,
         gammas: Dict[str, float] = None,
     ):
-        info = {"status": "disabled", "solve_time_ms": 0.0, "max_slack": 0.0, "num_active_slack": 0}
+        info = {"status": "disabled"}
         if not self.enabled:
             return steer_nom, desired_speed, info
         if osqp is None or sp is None:
@@ -202,13 +196,6 @@ class CBFQPFilter:
             )
 
             closing_speed = max(0.0, -relative_speed_along_line)
-            # Actor motion is otherwise treated as constant-velocity over the decision
-            # interval (IROS review: actor acceleration silently ignored). Bound this by
-            # assuming the actor could still be accelerating toward the ego at up to
-            # actor_accel_max, and use the correspondingly higher closing speed for the
-            # stopping-distance term only (the raw closing_speed above still drives the
-            # QP's v_los_i-based constraint relaxation for receding actors unchanged).
-            closing_speed_for_stopping = closing_speed + self.actor_accel_max * dt
             try:
                 actor_bounding_box = actor.bounding_box.extent
                 actor_collision_radius = float(
@@ -223,26 +210,12 @@ class CBFQPFilter:
             barrier_now = (
                 relative_distance
                 - safety_distance
-                - (closing_speed_for_stopping**2) / (2.0 * self.a_brake)
+                - (closing_speed**2) / (2.0 * self.a_brake)
             )
             min_barrier_value = min(min_barrier_value, barrier_now)
 
             heading_alignment = float(np.dot(ego_heading_vector, relative_direction))
-            # Guard the eta_i ~= 0 degeneracy (IROS review R1 Q2): at a ~90 degree
-            # crossing, accel_coefficient collapses to ~0 and the QP constraint
-            # `accel_coefficient * a + slack >= rhs` degenerates to `slack >= rhs`,
-            # satisfiable purely via the slack penalty with no actual braking, right
-            # when a crossing pedestrian/cyclist needs it most. Once the actor is
-            # already inside the danger zone (barrier_now < 0), floor the *magnitude*
-            # of the alignment used in the coefficient so the QP still has to trade
-            # off against this actor instead of being free to ignore it; never flip
-            # its sign, and leave well-aligned (|eta_i| >= eta_floor) actors untouched.
-            if barrier_now < 0.0 and abs(heading_alignment) < self.eta_floor:
-                effective_alignment = math.copysign(self.eta_floor, heading_alignment) \
-                    if heading_alignment != 0.0 else self.eta_floor
-            else:
-                effective_alignment = heading_alignment
-            accel_coefficient = -0.5 * effective_alignment * (dt**2)
+            accel_coefficient = -0.5 * heading_alignment * (dt**2)
             barrier_gain = self._actor_gamma(actor)
             constraint_rhs = (
                 -barrier_gain * barrier_now - relative_speed_along_line * dt
@@ -336,24 +309,12 @@ class CBFQPFilter:
             polish=True,
         )
         res = prob.solve()
-        # OSQP reports its own timing; run_time includes setup+solve+polish and is
-        # the number that matters for the real-time (5 Hz / 200 ms) budget.
-        solve_time_ms = float(getattr(res.info, "run_time", 0.0)) * 1000.0
 
         if res.x is None or res.info.status_val not in (1, 2):
-            info.update(
-                {
-                    "status": "qp_fail",
-                    "min_barrier_value": min_barrier_value,
-                    "solve_time_ms": solve_time_ms,
-                }
-            )
+            info.update({"status": "qp_fail", "min_barrier_value": min_barrier_value})
             return steer_nom, desired_speed, info
 
         safe_longitudinal_accel = float(res.x[0])
-        slacks = res.x[1:] if len(res.x) > 1 else np.array([])
-        max_slack = float(slacks.max()) if slacks.size else 0.0
-        num_active_slack = int((slacks > 1e-4).sum()) if slacks.size else 0
         desired_speed_safe = max(0.0, ego_speed + safe_longitudinal_accel * dt)
         info.update(
             {
@@ -364,9 +325,6 @@ class CBFQPFilter:
                 "num_filtered_behind": filtered_behind,
                 "num_filtered_lateral": filtered_lateral,
                 "num_crossing_kept": crossing_kept,
-                "solve_time_ms": solve_time_ms,
-                "max_slack": max_slack,
-                "num_active_slack": num_active_slack,
             }
         )
 

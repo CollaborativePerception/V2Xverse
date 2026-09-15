@@ -1,4 +1,0 @@
-setting,n,mean_score,completion_rate,total_collisions
-normal_baseline,20,67.73,0.95,14
-comm_latency_400ms,20,69.23,0.9,13
-pose_noise_0.2_0.2,20,73.42,0.9,12

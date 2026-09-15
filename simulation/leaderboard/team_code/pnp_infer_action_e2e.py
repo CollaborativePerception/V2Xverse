@@ -238,14 +238,10 @@ class SpVoxelPreprocessor(BasePreprocessor):
         """
         super(SpVoxelPreprocessor, self).__init__(preprocess_params,
                                                   train)
-        self.spconv = 1
         try:
             from spconv.utils import VoxelGeneratorV2 as VoxelGenerator
         except:
-            from cumm import tensorview as tv
-            from spconv.utils import Point2VoxelCPU3d as VoxelGenerator
-            self.tv = tv
-            self.spconv = 2
+            from spconv.utils import VoxelGenerator
 
         self.lidar_range = self.params['cav_lidar_range']
         self.voxel_size = self.params['args']['voxel_size']
@@ -261,21 +257,12 @@ class SpVoxelPreprocessor(BasePreprocessor):
         self.grid_size = np.round(grid_size).astype(np.int64)
 
         # use sparse conv library to generate voxel
-        if self.spconv == 1:
-            self.voxel_generator = VoxelGenerator(
-                voxel_size=self.voxel_size,
-                point_cloud_range=self.lidar_range,
-                max_num_points=self.max_points_per_voxel,
-                max_voxels=self.max_voxels
-            )
-        else:
-            self.voxel_generator = VoxelGenerator(
-                vsize_xyz=self.voxel_size,
-                coors_range_xyz=self.lidar_range,
-                max_num_points_per_voxel=self.max_points_per_voxel,
-                num_point_features=4,
-                max_num_voxels=self.max_voxels
-            )
+        self.voxel_generator = VoxelGenerator(
+            voxel_size=self.voxel_size,
+            point_cloud_range=self.lidar_range,
+            max_num_points=self.max_points_per_voxel,
+            max_voxels=self.max_voxels
+        )
 
     def preprocess(self, pcd_np):
         """
@@ -288,22 +275,13 @@ class SpVoxelPreprocessor(BasePreprocessor):
             Dict[str, np.ndarray]: Voxel features, coordinates, and per-voxel point counts.
         """
         data_dict = {}
-        if self.spconv == 1:
-            voxel_output = self.voxel_generator.generate(pcd_np)
-        else:
-            pcd_tv = self.tv.from_numpy(pcd_np)
-            voxel_output = self.voxel_generator.point_to_voxel(pcd_tv)
+        voxel_output = self.voxel_generator.generate(pcd_np)
         if isinstance(voxel_output, dict):
             voxels, coordinates, num_points = \
                 voxel_output['voxels'], voxel_output['coordinates'], \
                 voxel_output['num_points_per_voxel']
         else:
             voxels, coordinates, num_points = voxel_output
-
-        if self.spconv == 2:
-            voxels = voxels.numpy()
-            coordinates = coordinates.numpy()
-            num_points = num_points.numpy()
 
         data_dict['voxel_features'] = voxels
         data_dict['voxel_coords'] = coordinates
@@ -629,29 +607,14 @@ class PnP_infer():
 		self.rl_cost_w_prox = float(rl_config.get("cost_w_prox", 0.6))
 		self.rl_cost_w_ttc = float(rl_config.get("cost_w_ttc", 0.4))
 		self.rl_terminal_collision = float(rl_config.get("cost_terminal_collision", 3.0))
-		if self.rl_cost_blend_mode not in ("max", "weighted"):
+		if self.rl_cost_blend_mode != "max":
 			logging.warning(
 				"Unsupported rl.cost_blend_mode=%s, falling back to 'max'",
 				self.rl_cost_blend_mode,
 			)
 			self.rl_cost_blend_mode = "max"
-		# Rule-based (non-learned) gamma scheduler baseline (IROS review R8 W4:
-		# "no comparison to ... a rule-based scheduler"). A simple hand-designed
-		# time-to-collision ramp per actor class, requiring no trained checkpoint --
-		# tests whether the learned policy earns its complexity over a hand-tuned rule.
-		self.rl_policy_type = str(rl_config.get("policy_type", "learned")).lower()
-		self.rule_based_ttc_min = float(rl_config.get("rule_based_ttc_min", 1.0))
-		self.rule_based_ttc_max = float(rl_config.get("rule_based_ttc_max", 4.0))
-		# Observation-space ablation probe (IROS review R1 Experimental Validity:
-		# "No ablations exist for major design choices: ... observation space ...").
-		# Training-free proxy: zero the listed obs indices before the *learned*
-		# policy sees them (frozen checkpoint, no retraining) so we can measure how
-		# much the deployed policy's driving performance degrades when a feature is
-		# hidden from it. Does NOT retrain a policy that never had that feature --
-		# only training under the constraint answers that rigorously.
-		self.rl_obs_ablation_zero_indices = list(rl_config.get("obs_ablation_zero_indices", []) or [])
 		self.rl_trainer = None
-		if self.use_rl and self.rl_policy_type != "rule_based":
+		if self.use_rl:
 			rl_cfg = rl_config
 			resume_path = rl_cfg.get("resume_path", None)
 			env_resume_path = os.environ.get("RL_RESUME_PATH", "").strip()
@@ -873,8 +836,8 @@ class PnP_infer():
 				if ttc < ttc_threshold:
 					c_ttc = float(np.clip(1.0 - ttc / ttc_threshold, 0.0, 1.0))
 
-			if self.rl_cost_blend_mode == "weighted":
-				risk_i = self.rl_cost_w_prox * c_prox + self.rl_cost_w_ttc * c_ttc
+			if self.rl_cost_blend_mode == "max":
+				risk_i = max(c_prox, c_ttc)
 			else:
 				risk_i = max(c_prox, c_ttc)
 
@@ -882,52 +845,10 @@ class PnP_infer():
 
 		return float(np.clip(max_risk, 0.0, 1.0))
 
-	def _rule_based_gammas(self, obs):
-		"""
-		Hand-designed, non-learned gamma scheduler: rl.policy_type='rule_based'.
-
-		For each actor class, ramps gamma linearly from gmin (at or beyond
-		rule_based_ttc_max seconds to contact) to gmax (at or inside
-		rule_based_ttc_min seconds to contact), using the same
-		(min_dist, closing_speed) observation the learned policy sees. No
-		training or checkpoint required -- IROS review R8 W4.
-		"""
-		gmin, gmax = self.gamma_range
-		class_slices = {
-			"gamma_vehicle": (2, 3),
-			"gamma_ped": (5, 6),
-			"gamma_bike": (8, 9),
-		}
-		gammas = {}
-		for key, (d_idx, c_idx) in class_slices.items():
-			dist = float(obs[d_idx])
-			closing = float(obs[c_idx])
-			if closing <= 1e-3:
-				gammas[key] = float(gmin)
-				continue
-			ttc = dist / (closing + 1e-6)
-			frac = np.clip(
-				(self.rule_based_ttc_max - ttc)
-				/ max(self.rule_based_ttc_max - self.rule_based_ttc_min, 1e-6),
-				0.0,
-				1.0,
-			)
-			gammas[key] = float(gmin + frac * (gmax - gmin))
-		return gammas
-
 	def _action_to_gammas(self, action):
 		gmin, gmax = self.gamma_range
 		action = np.clip(action, -1.0, 1.0)
 		gamma = (action + 1.0) / 2.0 * (gmax - gmin) + gmin
-		if len(gamma) == 1:
-			# Single shared-gamma ablation (rl.action_dim=1): broadcast the one
-			# learned gain to all three actor classes instead of indexing per-class.
-			shared = float(gamma[0])
-			return {
-				"gamma_vehicle": shared,
-				"gamma_ped": shared,
-				"gamma_bike": shared,
-			}
 		return {
 			"gamma_vehicle": float(gamma[0]),
 			"gamma_ped": float(gamma[1]),
@@ -1272,15 +1193,8 @@ class PnP_infer():
 				world  = ego_actor.get_world()
 				actors = list(world.get_actors().filter("*vehicle*")) + list(world.get_actors().filter("*walker*"))
 				gammas = None
-				if self.use_rl and self.rl_policy_type == "rule_based":
+				if self.use_rl and self.rl_trainer is not None:
 					obs_rl, _ = self._build_rl_obs(ego_actor, actors, desired_speed)
-					gammas = self._rule_based_gammas(obs_rl)
-				elif self.use_rl and self.rl_trainer is not None:
-					obs_rl, _ = self._build_rl_obs(ego_actor, actors, desired_speed)
-					if self.rl_obs_ablation_zero_indices:
-						obs_rl = obs_rl.copy()
-						for _idx in self.rl_obs_ablation_zero_indices:
-							obs_rl[_idx] = 0.0
 					if self.rl_eval_only:
 						action, _, _ = self.rl_trainer.select_action(
 							obs_rl, deterministic=self.rl_deterministic_eval

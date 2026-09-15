@@ -1,3 +1,0 @@
-planner,n,mean_score,completion_rate,collisions_per_km
-codriving_collaborative,315,75.81,0.908,6.75
-no_collaboration_single_agent,105,67.57,0.895,10.91

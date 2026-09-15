@@ -1,0 +1,2 @@
+method,num_steps,num_missing_cbf_info,solve_time_ms_mean,solve_time_ms_p95,solve_time_ms_max,pct_steps_active_slack,pct_steps_solver_fallback
+fixed_cbf,42273,1,0.017174358432096137,0.04081500000000002,0.520241,30.442599295058308,0.0

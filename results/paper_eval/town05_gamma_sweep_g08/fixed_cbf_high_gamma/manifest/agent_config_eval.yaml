@@ -1,0 +1,113 @@
+control:
+  turn_KP: 1.0
+  turn_KI: 0.2
+  turn_KD: 0.1
+  turn_n: 5
+  speed_KP: 5.0
+  speed_KI: 1
+  speed_KD: 0.1
+  speed_n: 20
+  max_throttle: 0.75
+  brake_speed: 0.1
+  brake_ratio: 1.1
+  clip_delta: 0.35
+  max_speed: 10
+  collision_buffer:
+  - 2.5
+  - 1.2
+  momentum: 0
+  target_point_distance: 10
+  detect_threshold: 0.04
+  lateral_controller: pid
+  pp_wheelbase_m: 2.8
+  pp_max_steer_angle_rad: 1.22
+  pp_lookahead_min_m: 1.4
+  pp_lookahead_gain_s: 0.9
+  pp_lookahead_max_m: 5.0
+  pp_interp_step_m: 0.25
+  pp_steer_gain: 0.68
+  pp_steer_sign: 1.0
+  pp_low_speed_steer_zero_mps: 0.01
+RSU:
+  change_rsu_frame: 5
+  rsu_height: 7.5
+  rsu_lane_side: right
+  rsu_distance: 12
+simulation:
+  ego_num: 1
+  skip_frames: 4
+  save_step_outputs: false
+perception:
+  core_method: collaborative_perception
+  detect_threshold: 0.04
+  detection_range:
+  - 36
+  - 12
+  - 12
+  - 12
+  perception_model_dir: checkpoints/codriving/perception
+planning:
+  core_method: MotionNet
+  planner_config: codriving/hypes_yaml/codriving/end2end_codriving.yaml
+  planner_model_checkpoint: checkpoints/codriving/planner/codriving_planner.ckpt
+cbf:
+  enabled: true
+  debug: true
+  max_distance: 30.0
+  margin: 2.5
+  a_brake: 6.0
+  a_min: -8.0
+  a_max: 4.0
+  slack_weight: 1000.0
+  gamma_vehicle: 0.8
+  gamma_ped: 0.8
+  gamma_bike: 0.8
+  dt: 0.2
+  actor_path_gating: true
+  gate_rear_distance: 2.0
+  gate_lateral_distance: 2.5
+  gate_lateral_speed_gain: 0.04
+  gate_enable_crossing: true
+  gate_crossing_ttc: 3.2
+  gate_crossing_forward: 16.0
+  gate_crossing_rear: 2.0
+rl:
+  enabled: false
+  obs_dim: 11
+  action_dim: 3
+  n_steps: 2000
+  log_dir: /home/henaparween/mars_lab/V2Xverse-ASRL/results/paper_eval/town05_gamma_sweep_g08/fixed_cbf_high_gamma/rl
+  save_every: 1
+  resume_path: null
+  eval_only: false
+  deterministic_eval: true
+  learning_rate: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_coef: 0.2
+  update_epochs: 10
+  num_minibatches: 8
+  ent_coef: 0.005
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  cost_limit: 0.1
+  lagrange_mult: 1.0
+  lagrange_mult_max: 100.0
+  use_pid_lagrangian: true
+  pid_gains:
+  - 1.0
+  - 0.1
+  - 0.1
+  pid_ema_alpha: 0.9
+  pid_d_delay: 1
+  gamma_range:
+  - 0.05
+  - 0.8
+  cost_distance: 2.5
+  cost_d_safe: 10.0
+  cost_ttc_threshold: 3.0
+  cost_terminal_collision: 3.0
+  cost_blend_mode: max
+  cost_w_prox: 0.6
+  cost_w_ttc: 0.4
+  log_scale: 1000.0

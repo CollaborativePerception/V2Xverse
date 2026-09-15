@@ -12,6 +12,7 @@ Provisional code to evaluate Autonomous Agents for the CARLA Autonomous Driving 
 """
 from __future__ import print_function
 
+import re
 import traceback
 import argparse
 from argparse import RawTextHelpFormatter
@@ -191,14 +192,56 @@ class LeaderboardEvaluator(object):
             return False
         return bool(getattr(infer, "rl_eval_only", False))
 
+    @staticmethod
+    def _parse_route_num(route_id):
+        """Extract the trailing integer from a route id like 'RouteScenario_12'."""
+        match = re.search(r"(\d+)\s*$", str(route_id))
+        return int(match.group(1)) if match else None
+
+    @classmethod
+    def _is_validation_route(cls, route_record, val_every_n):
+        route_num = cls._parse_route_num(getattr(route_record, "route_id", None))
+        if route_num is None:
+            return False
+        return (route_num % val_every_n) == (val_every_n - 1)
+
     def _maybe_save_best(self, found_routes, args):
+        """
+        Save a "best" RL checkpoint based on driving performance so far.
+
+        IROS review R1 flagged that the original implementation selected "best"
+        using performance on the very routes the policy was training on, inflating
+        the reported metrics. When `args.val_every_n > 0`, every Nth route (by
+        numeric route id, so the split is tied to the route itself and not to
+        training order) is treated as held-out validation and is the *only* thing
+        used to decide "best" here -- it is never used for policy gradient updates
+        by the training loop, so this restores a genuine train/validation split.
+        Set `--val-every-n 0` to fall back to the old (not recommended) behavior.
+        """
         best_every = int(getattr(args, "best_every", 0) or 0)
         if best_every <= 0:
             return
         if found_routes <= 0 or (found_routes % best_every) != 0:
             return
 
-        global_record = self.statistics_manager[0].compute_global_statistics(found_routes)
+        val_every_n = int(getattr(args, "val_every_n", 0) or 0)
+        if val_every_n > 0:
+            record_filter = lambda r: self._is_validation_route(r, val_every_n)
+            val_records = [
+                r for r in self.statistics_manager[0]._registry_route_records
+                if self._is_validation_route(r, val_every_n)
+            ]
+            if not val_records:
+                # No validation route has completed yet -- nothing to score "best" on.
+                return
+            global_record = self.statistics_manager[0].compute_global_statistics(
+                found_routes, record_filter=record_filter
+            )
+            num_scored_routes = len(val_records)
+        else:
+            global_record = self.statistics_manager[0].compute_global_statistics(found_routes)
+            num_scored_routes = found_routes
+
         score = float(global_record.scores.get("score_composed", 0.0))
         completion = float(global_record.scores.get("score_route", 0.0))
         infractions = global_record.infractions
@@ -207,13 +250,15 @@ class LeaderboardEvaluator(object):
             + float(infractions.get("collisions_vehicle", 0.0))
             + float(infractions.get("collisions_layout", 0.0))
         )
-        collisions_per_route = collisions_total / max(1, found_routes)
+        collisions_per_route = collisions_total / max(1, num_scored_routes)
 
         candidate = {
             "score": score,
             "collisions_per_route": collisions_per_route,
             "completion": completion,
             "routes": int(found_routes),
+            "val_routes_scored": int(num_scored_routes),
+            "val_every_n": int(val_every_n),
             "timestamp": datetime.utcnow().isoformat(),
         }
 
@@ -1082,6 +1127,13 @@ def main():
                         type=int,
                         default=10,
                         help='Save a best checkpoint every N completed routes (0 = disabled).')
+    parser.add_argument('--val-every-n',
+                        type=int,
+                        default=5,
+                        help='Every Nth route (by numeric route id) is held out as a validation '
+                             'route and excluded from training; "best" checkpoint selection uses '
+                             'only these held-out routes instead of the training route stream '
+                             '(0 = disabled, restores the old training-set-selection behavior).')
     parser.add_argument('--scenarios',
                         default='simulation/leaderboard/data/scenarios/town05_all_scenarios_2.json',
                         help='Name of the scenario annotation file to be mixed with the route.')
